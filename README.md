@@ -29,6 +29,14 @@ See the [Releases](https://github.com/pragyan11/securetms-fullstack-prototype/re
 8. [API Overview](#api-overview)
 9. [Contributing](#contributing)
 10. [License](#license)
+11. [Team / Contributors](#team--contributors)
+12. [Demo / Live Preview](#demo--live-preview)
+13. [Screenshots](#screenshots)
+14. [Architecture Overview](#architecture-overview)
+15. [Usage Walkthrough](#usage-walkthrough)
+16. [Future Work / Roadmap](#future-work--roadmap)
+17. [Acknowledgements](#acknowledgements)
+18. [Contact / Support](#contact--support)
 
 ---
 
@@ -114,6 +122,75 @@ Please fork the repository, create a feature branch, and submit a pull request.
 
 ## License
 This prototype is provided **as‑is** for educational purposes. See the `LICENSE` file for more information.
+
+---
+
+## Team / Contributors
+
+| Name | Role | GitHub |
+|------|------|--------|
+| Pragyan | Project Lead / Backend | [pragyan11](https://github.com/pragyan11) |
+| Member 2 | Front‑end UI | [github.com/member2](https://github.com/member2) |
+| Member 3 | Database & Models | [github.com/member3](https://github.com/member3) |
+| Member 4 | DevOps / CI | [github.com/member4](https://github.com/member4) |
+| Member 5 | Documentation & Testing | [github.com/member5](https://github.com/member5) |
+
+## Demo / Live Preview
+
+A live demo of the application is hosted at **[https://securetms-demo.example.com](https://securetms-demo.example.com)** (replace with your actual URL). The demo showcases the full login flow, dashboard navigation, and basic CRUD operations.
+
+## Screenshots
+
+![Home Page](./screenshots/home.png)
+![Dashboard](./screenshots/dashboard.png)
+![Login Flow](./screenshots/login.png)
+
+> *Add the corresponding images to a `screenshots/` folder in the repository.*
+
+## Architecture Overview
+
+```mermaid
+graph LR
+   A[Browser (HTML/CSS/JS)] -->|HTTP| B[Express Server]
+   B -->|Mongoose| C[MongoDB]
+   B -->|WebAuthn/FIDO2| D[Authentication Service]
+   style A fill:#f9f,stroke:#333,stroke-width:2px
+   style B fill:#bbf,stroke:#333,stroke-width:2px
+   style C fill:#bfb,stroke:#333,stroke-width:2px
+   style D fill:#ff9,stroke:#333,stroke-width:2px
+```
+
+## Usage Walkthrough
+
+1. **Register** a new user via the *Register* page.
+2. **Login** using the passwordless WebAuthn flow.
+3. **Create a booking** from the *Bookings* tab.
+4. **View fleet status** on the *Fleet* tab.
+5. **Logout** using the navigation bar.
+
+## Future Work / Roadmap
+
+- Implement real WebAuthn hardware support.
+- Add role‑based dashboards (admin, manager, driver).
+- Write unit and integration tests with Jest.
+- Dockerize the application for easy deployment.
+- Deploy CI pipeline to run linting and tests on every PR.
+
+## Acknowledgements
+
+This project uses the following open‑source libraries:
+
+- `express` – Fast, unopinionated web framework.
+- `mongoose` – Elegant MongoDB object modeling.
+- `@simplewebauthn/browser` & `@simplewebauthn/server` – WebAuthn implementation.
+- `dotenv` – Environment variable management.
+- `helmet` – Security headers.
+
+Special thanks to the **MDN Web Docs**, **Stack Overflow**, and our course mentors for guidance.
+
+## Contact / Support
+
+For questions, issues, or collaboration requests, please open an **[issue](https://github.com/pragyan11/securetms-fullstack-prototype/issues)** or contact the team via email at `securetms-capstone@example.com`.
 
 ---
 
