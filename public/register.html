@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SecureTMS – Register</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="index.html">Secure<span>TMS</span></a>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="register.html">Register</a>
+        <a href="login.html">Login</a>
+        <a href="dashboard.html">Dashboard</a>
+      </nav>
+    </header>
+
+    <main class="container auth-shell">
+      <section class="card auth-card">
+        <p class="eyebrow">Create account</p>
+        <h2>Register</h2>
+        <p class="card-text">Create a new SecureTMS account with passkey-based authentication and recovery routing.</p>
+
+        <label for="regName">Full name</label>
+        <input id="regName" type="text" placeholder="Enter full name" />
+
+        <label for="regEmail">Email</label>
+        <input id="regEmail" type="email" placeholder="Enter email" />
+
+        <label for="regRole">Role</label>
+        <select id="regRole">
+          <option value="Customer">Customer</option>
+          <option value="Driver">Driver</option>
+          <option value="Admin">Admin</option>
+        </select>
+
+        <label for="regMethod">Authentication method</label>
+        <select id="regMethod">
+          <option value="Passkey">Passkey</option>
+          <option value="Face">Face</option>
+        </select>
+        <button class="btn btn-secondary" id="prepareCamBtn" type="button">Prepare Camera</button>
+
+        <label for="regRecovery">Recovery email</label>
+        <input id="regRecovery" type="email" placeholder="Enter recovery email" />
+
+        <button class="btn btn-primary" id="registerBtn" type="button">Create Account</button>
+        <p id="regMsg" class="message"></p>
+        <!-- Hidden video element for Face capture (mirrors login page) -->
+        <video id="faceVideo" autoplay playsinline style="display:none; width:200px; height:auto; margin-top:10px;"></video>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

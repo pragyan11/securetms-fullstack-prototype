@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SecureTMS – Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="index.html">Secure<span>TMS</span></a>
+      <nav>
+        <a href="index.html">Home</a>
+        <a href="dashboard.html">Dashboard</a>
+        <a href="register.html">Register</a>
+        <a href="login.html">Login</a>
+      </nav>
+    </header>
+
+    <main class="container">
+      <section class="card dashboard-card" id="dashboard">
+        <div class="dashboard-header">
+          <div>
+            <p class="eyebrow">Operations console</p>
+            <h2>Dashboard</h2>
+          </div>
+          <button class="btn btn-secondary" id="logoutBtn" type="button">Logout</button>
+        </div>
+
+        <div class="output-panel">
+          <div class="output-toolbar">
+            <h3>System response</h3>
+            <div class="inner-tabs">
+              <button class="inner-tab active" data-tab="bookingsTab">Bookings</button>
+              <button class="inner-tab" data-tab="shipmentsTab">Shipments</button>
+              <button class="inner-tab" data-tab="fleetTab">Fleet</button>
+              <button class="inner-tab" data-tab="logsTab">Logs</button>
+              <button class="inner-tab" data-tab="adminTab">Admin Stats</button>
+            </div>
+          </div>
+
+          <div class="tab-content" id="bookingsTab">
+            <div class="tab-actions">
+              <button class="btn btn-secondary" id="addBookingBtn" type="button">Add Booking</button>
+              <button class="btn btn-secondary" id="refreshBookingsBtn" type="button">Refresh</button>
+            </div>
+            <div id="bookingsOutput" class="tab-output">Loading bookings…</div>
+          </div>
+
+          <div class="tab-content hidden" id="shipmentsTab">
+            <div class="tab-actions">
+              <button class="btn btn-secondary" id="addShipmentBtn" type="button">Add Shipment</button>
+              <button class="btn btn-secondary" id="refreshShipmentsBtn" type="button">Refresh Shipments</button>
+            </div>
+            <div id="shipmentsOutput" class="tab-output">Loading shipments…</div>
+          </div>
+
+          <div class="tab-content hidden" id="fleetTab">
+            <div class="tab-actions">
+              <button class="btn btn-secondary" id="addVehicleBtn" type="button">Add Vehicle</button>
+              <button class="btn btn-secondary" id="refreshFleetBtn" type="button">Refresh Fleet</button>
+            </div>
+            <div id="fleetOutput" class="tab-output">Loading fleet…</div>
+          </div>
+
+          <div class="tab-content hidden" id="logsTab">
+            <div class="tab-actions">
+              <button class="btn btn-secondary" id="refreshLogsBtn" type="button">Refresh Logs</button>
+            </div>
+            <pre id="logsOutput" class="tab-output">Loading logs…</pre>
+          </div>
+
+          <div class="tab-content hidden" id="adminTab">
+            <div class="tab-actions">
+              <button class="btn btn-secondary" id="refreshAdminBtn" type="button">Refresh Admin Stats</button>
+            </div>
+            <div id="adminOutput" class="tab-output">Loading admin stats…</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SecureTMS – Shipments</title>
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">Secure<span>TMS</span></div>
+      <nav>
+        <a href="../index.html">Home</a>
+        <a href="../bookings/">Bookings</a>
+        <a href="../shipments/">Shipments</a>
+        <a href="../fleet/">Fleet</a>
+        <a href="../login.html">Login</a>
+      </nav>
+    </header>
+
+    <main class="container">
+      <section class="hero">
+        <p class="eyebrow">Shipments module</p>
+        <h1>Track shipments across every mile of the journey.</h1>
+        <p class="hero-text">
+          Keep shipment progress visible and coordinated from dispatch through delivery with a refined operations layout.
+        </p>
+      </section>
+
+      <section class="card">
+        <div class="dashboard-header page-header">
+          <div>
+            <p class="eyebrow">Live movement</p>
+            <h2>Shipment control center</h2>
+          </div>
+          <button class="btn btn-secondary" id="refreshShipmentsBtn" type="button">Refresh data</button>
+        </div>
+        <div id="shipmentsOutput" class="tab-output">Loading shipments…</div>
+      </section>
+    </main>
+  </div>
+
+  <script src="../app.js"></script>
+</body>
+</html>

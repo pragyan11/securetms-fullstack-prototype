@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SecureTMS – Fleet</title>
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">Secure<span>TMS</span></div>
+      <nav>
+        <a href="../index.html">Home</a>
+        <a href="../bookings/">Bookings</a>
+        <a href="../shipments/">Shipments</a>
+        <a href="../fleet/">Fleet</a>
+        <a href="../login.html">Login</a>
+      </nav>
+    </header>
+
+    <main class="container">
+      <section class="hero">
+        <p class="eyebrow">Fleet module</p>
+        <h1>Keep your fleet operational, visible, and ready.</h1>
+        <p class="hero-text">
+          Track vehicles, status, locations, and maintenance posture from one high-clarity command surface.
+        </p>
+      </section>
+
+      <section class="card">
+        <div class="dashboard-header page-header">
+          <div>
+            <p class="eyebrow">Asset overview</p>
+            <h2>Fleet operations</h2>
+          </div>
+          <button class="btn btn-secondary" id="refreshFleetBtn" type="button">Refresh data</button>
+        </div>
+        <div id="fleetOutput" class="tab-output">Loading fleet…</div>
+      </section>
+    </main>
+  </div>
+
+  <script src="../app.js"></script>
+</body>
+</html>
