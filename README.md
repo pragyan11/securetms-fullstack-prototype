@@ -51,7 +51,11 @@ See the [Releases](https://github.com/pragyan11/securetms-fullstack-prototype/re
 
 ## Prerequisites
 * **Node.js** (v18 or later) – includes `npm`.
-* **MongoDB** – running locally (default connection string `mongodb://localhost:27017/securetms`).
+* **MongoDB 8.3** (or compatible) – running locally. The application now uses the connection string defined in `.env`:
+   ```
+   MONGO_URI=mongodb://127.0.0.1:27017/transitpass_tms
+   ```
+   Ensure the `transitpass_tms` database exists (it will be created automatically on first run).
 * **Git** – for version control (already set up for this repo).
 
 ---
@@ -66,12 +70,13 @@ npm install
 ---
 
 ## Running the Application
-1. **Start MongoDB** – ensure the service is running (e.g., `mongod` or via the provided `start_mongodb.bat`).
+1. **Start MongoDB** – ensure the service is running (e.g., `mongod` or via the provided `start_mongodb.bat`). The server expects MongoDB 8.3 but any compatible version works.
 2. **Launch the server**:
    ```bash
    npm start   # runs `node server.js`
    ```
-3. Open your browser at **http://127.0.0.1:4000**.
+   The server will try to bind to port **4000**; if that port is already in use it automatically falls back to **4001** (as observed during testing).
+3. Open your browser at the displayed URL, e.g. **http://127.0.0.1:4000** or **http://127.0.0.1:4001**.
 
 The entry point is `public/index.html`. Use the navigation bar to explore the dashboard, bookings, fleet, and authentication pages.
 
