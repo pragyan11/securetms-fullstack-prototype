@@ -1,18 +1,34 @@
 # SecureTMS Prototype
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
+[![Node.js](https://img.shields.io/badge/Node-18%2B-green.svg)](https://nodejs.org/) 
+[![CI](https://github.com/pragyan11/securetms-fullstack-prototype/actions/workflows/ci.yml/badge.svg)](https://github.com/pragyan11/securetms-fullstack-prototype/actions/workflows/ci.yml)
+
 > **Secure Transport Management System (SecureTMS)** – a full‑stack prototype demonstrating passwordless authentication (FIDO2/WebAuthn) and a modern operations dashboard for logistics.
+
+## About
+
+SecureTMS is a lightweight, full‑stack prototype that showcases passwordless authentication using WebAuthn/FIDO2 concepts, combined with a responsive logistics dashboard. It serves as a reference implementation for developers exploring modern authentication flows and basic transport management features.
+
+## Releases
+
+Current version: **1.0.0**
+
+See the [Releases](https://github.com/pragyan11/securetms-fullstack-prototype/releases) page for changelog and future version updates.
 
 ---
 
 ## Table of Contents
-1. [Features](#features)
-2. [Prerequisites](#prerequisites)
-3. [Installation](#installation)
-4. [Running the Application](#running-the-application)
-5. [Project Structure](#project-structure)
-6. [API Overview](#api-overview)
-7. [Contributing](#contributing)
-8. [License](#license)
+1. [About](#about)
+2. [Releases](#releases)
+3. [Features](#features)
+4. [Prerequisites](#prerequisites)
+5. [Installation](#installation)
+6. [Running the Application](#running-the-application)
+7. [Project Structure](#project-structure)
+8. [API Overview](#api-overview)
+9. [Contributing](#contributing)
+10. [License](#license)
 
 ---
 
