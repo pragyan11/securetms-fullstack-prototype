@@ -241,7 +241,7 @@ function renderBookings(bookingsArray) {
 
   bookingsArray.forEach((booking, idx) => {
     const statusIcon = booking.status === 'Pending' ? '⏳' : booking.status === 'Completed' ? '✅' : '📦';
-    const statusColor = booking.status === 'Pending' ? '#ff9f43' : booking.status === 'Completed' ? '#22c55e' : '#94a3b8';
+    const statusColor = booking.status === 'Pending' ? '#2B8BB8' : booking.status === 'Completed' ? '#22c55e' : '#94a3b8';
     const shortId = (booking._id || '').substring(0, 8).toUpperCase();
     const createdDate = booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : 'N/A';
 
@@ -298,7 +298,7 @@ function renderShipments(shipmentsArray) {
       'default': '📦'
     };
     const statusIcon = statusIcons[shipment.status] || statusIcons['default'];
-    const statusColor = shipment.status === 'In Transit' ? '#ff9f43' : shipment.status === 'Delivered' ? '#22c55e' : '#94a3b8';
+    const statusColor = shipment.status === 'In Transit' ? '#2B8BB8' : shipment.status === 'Delivered' ? '#22c55e' : '#94a3b8';
     const shortId = (shipment._id || '').substring(0, 8).toUpperCase();
     const updatedDate = shipment.updatedAt ? new Date(shipment.updatedAt).toLocaleTimeString() : 'N/A';
 

@@ -245,7 +245,7 @@ securetms_fullstack_prototype/
 
 **Design System**
 - **Color Palette**:
-  - Primary: `#ff9f43` (warm orange for logistics accent)
+  - Primary: `#2B8BB8` (blue accent)
   - Background: `#07111f` (dark navy)
   - Text: `#e6eefc` (light blue-gray)
   - Muted: `#94a3b8` (subtle gray)
