@@ -138,7 +138,7 @@ This prototype is provided **as‑is** for educational purposes. See the `LICENS
 | Member 2 | Front‑end UI | [Sumitra](https://github.com/123sumitra) |
 | Member 3 | Database & Models | [Eleem](https://github.com/eleem111) |
 | Member 4 | DevOps / CI | [Swastika](https://github.com/swastikakarki-eng) |
-| Member 5 | Documentation & Testing | [Bipul]((https://github.com/biplopbista0-crypto))|
+| Member 5 | Documentation & Testing | [Bipul](https://github.com/biplopbista0-crypto)|
 
 ## Demo / Live Preview
 
