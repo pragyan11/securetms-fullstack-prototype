@@ -151,6 +151,15 @@ A live demo of the application is hosted at **[https://securetms-demo.example.co
 ![Login Flow](./screenshots/login.png)
 
 > *Add the corresponding images to a `screenshots/` folder in the repository.*
+> <img width="960" height="475" alt="image" src="https://github.com/user-attachments/assets/81694f81-1a2c-4d65-9375-5f5d118998cf" />
+<img width="960" height="470" alt="image" src="https://github.com/user-attachments/assets/c53d5d4e-fdac-43f9-86d3-03a7c46e0f81" />
+
+> <img width="955" height="467" alt="image" src="https://github.com/user-attachments/assets/80658825-f382-4ecd-878a-9af29cc3bf54" />
+> <img width="959" height="476" alt="image" src="https://github.com/user-attachments/assets/a0ef6e7b-bb08-4235-8b55-7bd54841ffd9" />
+> <img width="939" height="462" alt="image" src="https://github.com/user-attachments/assets/ac079960-8be0-4f57-a1a2-806201d1565f" />
+> <img width="957" height="473" alt="image" src="https://github.com/user-attachments/assets/acbb9dd2-1004-44b2-8505-a5607655fc12" />
+
+
 
 ## Architecture Overview
 
