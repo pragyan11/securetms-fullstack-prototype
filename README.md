@@ -135,8 +135,8 @@ This prototype is provided **as‑is** for educational purposes. See the `LICENS
 | Name | Role | GitHub |
 |------|------|--------|
 | Pragyan | Project Lead / Backend | [pragyan11](https://github.com/pragyan11) |
-| Member 2 | Front‑end UI | [github.com/member2](https://github.com/123sumitra) |
-| Member 3 | Database & Models | [github.com/member3](https://github.com/eleem111) |
+| Member 2 | Front‑end UI | [123sumitra](https://github.com/123sumitra) |
+| Member 3 | Database & Models | [eleem111](https://github.com/eleem111) |
 | Member 4 | DevOps / CI | [github.com/member4](https://github.com/member4) |
 | Member 5 | Documentation & Testing | [github.com/member5](https://github.com/member5) |
 
