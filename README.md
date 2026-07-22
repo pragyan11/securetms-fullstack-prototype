@@ -134,11 +134,11 @@ This prototype is provided **as‑is** for educational purposes. See the `LICENS
 
 | Name | Role | GitHub |
 |------|------|--------|
-| Pragyan | Project Lead / Backend | [pragyan11](https://github.com/pragyan11) |
-| Member 2 | Front‑end UI | [123sumitra](https://github.com/123sumitra) |
-| Member 3 | Database & Models | [eleem111](https://github.com/eleem111) |
-| Member 4 | DevOps / CI | [swastikakarki-eng](https://github.com/swastikakarki-eng) |
-| Member 5 | Documentation & Testing | [github.com/member5]((https://github.com/biplopbista0-crypto))|
+| Pragyan | Project Lead / Backend | [Pragyan](https://github.com/pragyan11) |
+| Member 2 | Front‑end UI | [Sumitra](https://github.com/123sumitra) |
+| Member 3 | Database & Models | [Eleem](https://github.com/eleem111) |
+| Member 4 | DevOps / CI | [Swastika](https://github.com/swastikakarki-eng) |
+| Member 5 | Documentation & Testing | [Bipul]((https://github.com/biplopbista0-crypto))|
 
 ## Demo / Live Preview
 
