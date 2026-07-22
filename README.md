@@ -145,12 +145,6 @@ This prototype is provided **as‑is** for educational purposes. See the `LICENS
 A live demo of the application is hosted at **[https://securetms-demo.example.com](https://securetms-demo.example.com)** (replace with your actual URL). The demo showcases the full login flow, dashboard navigation, and basic CRUD operations.
 
 ## Screenshots
-
-![Home Page](./screenshots/home.png)
-![Dashboard](./screenshots/dashboard.png)
-![Login Flow](./screenshots/login.png)
-
-> *Add the corresponding images to a `screenshots/` folder in the repository.*
 > <img width="960" height="475" alt="image" src="https://github.com/user-attachments/assets/81694f81-1a2c-4d65-9375-5f5d118998cf" />
 <img width="960" height="470" alt="image" src="https://github.com/user-attachments/assets/c53d5d4e-fdac-43f9-86d3-03a7c46e0f81" />
 
