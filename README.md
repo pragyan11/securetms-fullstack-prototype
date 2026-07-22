@@ -159,21 +159,6 @@ A live demo of the application is hosted at **[https://securetms-demo.example.co
 > <img width="939" height="462" alt="image" src="https://github.com/user-attachments/assets/ac079960-8be0-4f57-a1a2-806201d1565f" />
 > <img width="957" height="473" alt="image" src="https://github.com/user-attachments/assets/acbb9dd2-1004-44b2-8505-a5607655fc12" />
 
-
-
-## Architecture Overview
-
-```mermaid
-graph LR
-   A[Browser (HTML/CSS/JS)] -->|HTTP| B[Express Server]
-   B -->|Mongoose| C[MongoDB]
-   B -->|WebAuthn/FIDO2| D[Authentication Service]
-   style A fill:#f9f,stroke:#333,stroke-width:2px
-   style B fill:#bbf,stroke:#333,stroke-width:2px
-   style C fill:#bfb,stroke:#333,stroke-width:2px
-   style D fill:#ff9,stroke:#333,stroke-width:2px
-```
-
 ## Usage Walkthrough
 
 1. **Register** a new user via the *Register* page.
@@ -206,6 +191,3 @@ Special thanks to the **MDN Web Docs**, **Stack Overflow**, and our course mento
 
 For questions, issues, or collaboration requests, please open an **[issue](https://github.com/pragyan11/securetms-fullstack-prototype/issues)** or contact the team via email at `securetms-capstone@example.com`.
 
----
-
-*Happy hacking!*
