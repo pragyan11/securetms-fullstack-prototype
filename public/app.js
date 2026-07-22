@@ -573,6 +573,11 @@ async function loadAdminStats() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Reset camera readiness when entering the registration page to enforce preparation per session
+  if (window.location.pathname.includes('/register.html')) {
+    cameraReady = false;
+  }
+
   if (window.location.pathname.includes('/dashboard.html') && !authToken) {
     window.location.href = '/login.html';
     return;
@@ -597,14 +602,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('recoverBtn')?.addEventListener('click', recoverAccount);
   // Prepare camera button – requests webcam permission ahead of time and sets a flag
   document.getElementById('prepareCamBtn')?.addEventListener('click', async () => {
-    const msg = document.getElementById('loginMsg');
+    // Use the appropriate message element based on the current page (login or register)
+    const msg = document.getElementById('loginMsg') || document.getElementById('regMsg');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       // Immediately stop – we only needed the permission prompt
       stream.getTracks().forEach(t => t.stop());
       // Remember that permission was granted
       cameraReady = true;
-      if (msg) msg.textContent = 'Camera ready – you can now sign in with Face.';
+      if (msg) msg.textContent = 'Camera ready – you can now use Face authentication.';
     } catch (e) {
       cameraReady = false;
       if (msg) msg.textContent = 'Camera access denied: ' + (e.message || e);

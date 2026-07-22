@@ -1,4 +1,5 @@
 const express = require('express');
+const { body, validationResult } = require('express-validator');
 const Shipment = require('../models/Shipment');
 const AuditLog = require('../models/AuditLog');
 const auth = require('../middleware/auth');
@@ -15,30 +16,45 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
-  try {
-    const { shipmentId, vehicleNumber, driverName, status, location } = req.body;
-    const shipment = await Shipment.create({
-      shipmentId: shipmentId || `SHP-${Date.now()}`,
-      vehicleNumber,
-      driverName,
-      status: status || 'Created',
-      location,
-      updatedAt: new Date()
-    });
+router.post(
+  '/',
+  [
+    body('trackingId').optional().trim().escape(),
+    body('shipmentId').optional().trim().escape(),
+    body('vehicleNumber').notEmpty().trim().escape(),
+    body('driverName').optional().trim().escape(),
+    body('status').optional().isIn(['Created', 'In Transit', 'Delivered', 'Delivered', 'In Transit', 'Created']),
+    body('location').optional().trim().escape()
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    try {
+      const { trackingId, shipmentId, vehicleNumber, driverName, status, location } = req.body;
+      const shipment = await Shipment.create({
+        trackingId: trackingId || shipmentId || `TRK-${Date.now()}`,
+        vehicleNumber,
+        driverName,
+        status: status || 'Created',
+        location,
+        updatedAt: new Date()
+      });
 
-    await AuditLog.create({
-      userEmail: req.user.email,
-      action: 'SHIPMENT_CREATE',
-      details: `Created shipment ${shipment.shipmentId}`,
-      ipAddress: req.ip
-    });
+      await AuditLog.create({
+        userEmail: req.user.email,
+        action: 'SHIPMENT_CREATE',
+        details: `Created shipment ${shipment.shipmentId}`,
+        ipAddress: req.ip
+      });
 
-    res.status(201).json({ message: 'Shipment created', shipment });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+      res.status(201).json({ message: 'Shipment created', shipment });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
   }
-});
+);
 
 router.put('/:id', async (req, res) => {
   try {

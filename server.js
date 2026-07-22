@@ -7,6 +7,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
+const winston = require('winston');
 
 const authRoutes = require('./routes/auth');
 const bookingRoutes = require('./routes/bookings');
@@ -22,11 +23,20 @@ const Shipment = require('./models/Shipment');
 const AuditLog = require('./models/AuditLog');
 
 const app = express();
+// Winston logger configuration
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level.toUpperCase()}] ${message}`)
+  ),
+  transports: [new winston.transports.Console()]
+});
 const PORT = Number(process.env.PORT) || 4000;
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) {
-  console.error('MONGO_URI is missing in .env file');
+  logger.error('MONGO_URI is missing in .env file');
   process.exit(1);
 }
 
@@ -36,7 +46,9 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, limit: 200 }));
+// Correct rate limiting configuration: use 'max' to specify the request limit per window.
+// The previous 'limit' option was invalid, causing the middleware to block all requests with 429.
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
 app.use(express.static('public'));
 
 app.use('/api/auth', authRoutes);
@@ -172,17 +184,17 @@ async function seedDemoData() {
 
 function startHttpServer(port) {
   const server = app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+    logger.info(`Server running on port ${port}`);
   });
 
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      console.warn(`Port ${port} is busy. Trying ${port + 1}...`);
+      logger.warn(`Port ${port} is busy. Trying ${port + 1}...`);
       startHttpServer(port + 1);
       return;
     }
 
-    console.error('Server startup error:', err.message);
+    logger.error(`Server startup error: ${err.message}`);
     process.exit(1);
   });
 }
@@ -190,11 +202,11 @@ function startHttpServer(port) {
 mongoose
   .connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 })
   .then(async () => {
-    console.log('MongoDB connected');
+    logger.info('MongoDB connected');
     await seedDemoData();
     startHttpServer(PORT);
   })
   .catch((err) => {
-    console.error('MongoDB connection error:', err.message);
+    logger.error(`MongoDB connection error: ${err.message}`);
     process.exit(1);
   });

@@ -1,4 +1,5 @@
 const express = require('express');
+const { body, validationResult } = require('express-validator');
 const Vehicle = require('../models/Vehicle');
 const AuditLog = require('../models/AuditLog');
 const auth = require('../middleware/auth');
@@ -16,20 +17,35 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', requireRole('Admin'), async (req, res) => {
-  try {
-    const vehicle = await Vehicle.create({ ...req.body, updatedAt: new Date() });
-    await AuditLog.create({
-      userEmail: req.user.email,
-      action: 'VEHICLE_CREATE',
-      details: `Added ${vehicle.vehicleNumber}`,
-      ipAddress: req.ip
-    });
-    res.status(201).json({ message: 'Vehicle added', vehicle });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+router.post(
+  '/',
+  requireRole('Admin'),
+  [
+    body('vehicleNumber').notEmpty().trim().escape(),
+    body('vehicleType').notEmpty().trim().escape(),
+    body('driverName').optional().trim().escape(),
+    body('location').optional().trim().escape(),
+    body('status').optional().isIn(['Available', 'In Service', 'Maintenance'])
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    try {
+      const vehicle = await Vehicle.create({ ...req.body, updatedAt: new Date() });
+      await AuditLog.create({
+        userEmail: req.user.email,
+        action: 'VEHICLE_CREATE',
+        details: `Added ${vehicle.vehicleNumber}`,
+        ipAddress: req.ip
+      });
+      res.status(201).json({ message: 'Vehicle added', vehicle });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
   }
-});
+);
 
 router.put('/:id', requireRole('Admin'), async (req, res) => {
   try {
