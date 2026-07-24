@@ -8,8 +8,7 @@ const Vehicle = require('../models/Vehicle');
 const AuditLog = require('../models/AuditLog');
 const router = express.Router();
 
-// Disabled authentication for demo purposes; in production, enforce auth and role checks.
-// router.use(auth, requireRole('Admin'));
+router.use(auth, requireRole('Admin'));
 
 router.get('/dashboard', async (req, res) => {
   try {

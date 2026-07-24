@@ -1,6 +1,38 @@
 let authToken = localStorage.getItem('secureTmsToken') || '';
-// Tracks whether the user has granted webcam permission via the Prepare Camera button
-let cameraReady = false;
+
+function checkWebAuthnOrigin() {
+  const host = window.location.hostname;
+  if (host === '127.0.0.1' || host === '0.0.0.0') {
+    const msg = document.getElementById('loginMsg') || document.getElementById('regMsg');
+    if (msg) {
+      msg.style.display = 'block';
+      msg.textContent = 'WebAuthn requires a valid domain. Please open http://localhost:4000 instead of http://127.0.0.1:4000';
+    }
+    return false;
+  }
+  return true;
+}
+
+// Ensure SimpleWebAuthnBrowser library is loaded. If the global is missing, dynamically load it.
+async function ensureSimpleWebAuthnBrowser() {
+  if (typeof SimpleWebAuthnBrowser !== 'undefined') {
+    return;
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = '/libs/simplewebauthn-browser.umd.min.js';
+    script.onload = () => {
+      // The local build exposes the same global as the UMD bundle
+      if (typeof SimpleWebAuthnBrowser === 'undefined') {
+        reject(new Error('SimpleWebAuthnBrowser failed to initialize after script load'));
+      } else {
+        resolve();
+      }
+    };
+    script.onerror = () => reject(new Error('Failed to load SimpleWebAuthnBrowser script'));
+    document.head.appendChild(script);
+  });
+}
 
 function persistAuth(token) {
   authToken = token;
@@ -11,8 +43,110 @@ function persistAuth(token) {
   }
 }
 
+// Show/hide spinner during async operations
+function withSpinner(promise) {
+  showSpinner();
+  return promise.finally(hideSpinner);
+}
+
+/**
+ * Register a Passkey (WebAuthn) for the currently entered email.
+ * Uses the server endpoints `/webauthn/register/options` and `/webauthn/register`.
+ */
+async function registerPasskey() {
+  if (!checkWebAuthnOrigin()) {
+    alert('WebAuthn is not supported on this address. Please use http://localhost:4000');
+    return;
+  }
+  const email = document.getElementById('regEmail')?.value.trim();
+  if (!email) {
+    alert('Please enter an email before registering a Passkey.');
+    return;
+  }
+  // 1️⃣ Get registration options from the server
+  const optionsRes = await withSpinner(api('/api/auth/webauthn/register/options', 'POST', { email }, false));
+  if (optionsRes.error) {
+    alert('Failed to get registration options: ' + optionsRes.message);
+    return;
+  }
+  // 2️⃣ Call the browser's WebAuthn API (requires @simplewebauthn/browser loaded on the page)
+  let attResp;
+  try {
+    // Ensure the SimpleWebAuthnBrowser library is loaded before registration
+    await ensureSimpleWebAuthnBrowser();
+    // @simplewebauthn/browser provides startRegistration
+    attResp = await SimpleWebAuthnBrowser.startRegistration(optionsRes);
+  } catch (e) {
+    alert('Passkey registration failed: ' + e.message);
+    return;
+  }
+  // 3️⃣ Send attestation response back to server for verification
+  const verifyRes = await withSpinner(api('/api/auth/webauthn/register', 'POST', { email, attestationResponse: attResp }, false));
+  if (verifyRes.error || !verifyRes.verified) {
+    alert('Server verification failed: ' + (verifyRes.message || 'unknown'));
+    return;
+  }
+  alert('Passkey registered successfully!');
+}
+
+/**
+ * Login using a Passkey (WebAuthn).
+ * Uses `/webauthn/login/options` and `/webauthn/login` endpoints.
+ */
+async function loginPasskey() {
+  if (!checkWebAuthnOrigin()) {
+    alert('WebAuthn is not supported on this address. Please use http://localhost:4000');
+    return;
+  }
+  const email = document.getElementById('loginEmail')?.value.trim();
+  if (!email) {
+    alert('Please enter your email before logging in with a Passkey.');
+    return;
+  }
+  // 1️⃣ Get authentication options
+  const optsRes = await withSpinner(api('/api/auth/webauthn/login/options', 'POST', { email }, false));
+  if (optsRes.error) {
+    alert('Failed to get login options: ' + optsRes.message);
+    return;
+  }
+  // 2️⃣ Call browser API to get assertion
+  let assertion;
+  try {
+    // Ensure the SimpleWebAuthnBrowser library is available before invoking it
+    await ensureSimpleWebAuthnBrowser();
+    assertion = await SimpleWebAuthnBrowser.startAuthentication(optsRes);
+  } catch (e) {
+    alert('Passkey authentication failed: ' + e.message);
+    return;
+  }
+  // 3️⃣ Verify with server
+  const verify = await withSpinner(api('/api/auth/webauthn/login', 'POST', { email, assertionResponse: assertion }, false));
+  if (verify.error || !verify.verified) {
+    alert('Login verification failed: ' + (verify.message || 'unknown'));
+    return;
+  }
+  // Store JWT and redirect
+  persistAuth(verify.token);
+  redirectToDashboard();
+}
+
 function redirectToDashboard() {
   window.location.href = '/dashboard.html';
+}
+
+// Attach logout handler (if element exists on the page)
+const logoutBtn = document.getElementById('logoutBtn');
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', async () => {
+    const res = await api('/api/auth/logout', 'POST', null, true);
+    if (!res.error) {
+      persistAuth('');
+      // After logout, return to login page
+      window.location.href = '/login.html';
+    } else {
+      alert('Logout failed: ' + res.message);
+    }
+  });
 }
 
 function redirectToHome() {
@@ -70,40 +204,6 @@ function showRaw(obj, outputId = 'logsOutput') {
   output.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
 }
 
-// Capture a single frame from the user's webcam and return a base64 data URL
-async function captureFaceImage() {
-  const video = document.getElementById('faceVideo');
-  if (!video) throw new Error('Face video element not found');
-
-  // Request webcam access
-  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-  video.srcObject = stream;
-  video.style.display = 'block';
-
-  // Wait for the video to be ready
-  await new Promise((resolve) => {
-    video.onloadedmetadata = () => {
-      video.play();
-      resolve();
-    };
-  });
-
-  // Capture a frame after a short delay to allow camera to adjust
-  await new Promise(r => setTimeout(r, 500));
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  const dataUrl = canvas.toDataURL('image/png');
-
-  // Stop all tracks to release the camera
-  stream.getTracks().forEach(t => t.stop());
-  video.style.display = 'none';
-  video.srcObject = null;
-  return dataUrl;
-}
-
 function activateTab(tabId) {
   const tabs = document.querySelectorAll('.tab-content');
   const buttons = document.querySelectorAll('.inner-tab');
@@ -135,34 +235,26 @@ async function registerUser() {
     recoveryEmail: document.getElementById('regRecovery')?.value.trim() || ''
   };
 
-  // If Face authentication is selected, ensure the camera was prepared first.
-  if (data.authMethod === 'Face') {
-    if (!cameraReady) {
-      if (msg) msg.textContent = 'Please click "Prepare Camera" before registering with Face.';
-      return;
-    }
-    try {
-      const img = await captureFaceImage();
-      data.image = img; // attach base64 PNG
-    } catch (e) {
-      if (msg) msg.textContent = 'Face capture failed during registration: ' + (e.message || e);
-      return;
-    }
-    // Reset flag after registration so the user must prepare again for next use.
-    cameraReady = false;
-  }
-
   if (msg) msg.textContent = 'Creating your account...';
 
   const res = await api('/api/auth/register', 'POST', data);
-  if (msg) {
-    msg.textContent = res.message || 'Registration complete.';
+  if (res.error) {
+    if (msg) msg.textContent = res.message || 'Registration failed.';
+    return;
+  }
+
+  if (msg) msg.textContent = 'Account created. Registering your passkey...';
+
+  try {
+    await registerPasskey();
+    if (msg) msg.textContent = 'Account created and passkey registered successfully!';
+  } catch (e) {
+    if (msg) msg.textContent = 'Account created, but passkey registration failed: ' + (e.message || e);
   }
 }
 
 async function loginUser() {
   const email = document.getElementById('loginEmail')?.value.trim() || '';
-  const method = document.getElementById('loginMethod')?.value || 'Passkey';
   const msg = document.getElementById('loginMsg');
 
   if (!email) {
@@ -170,40 +262,13 @@ async function loginUser() {
     return;
   }
 
-  if (msg) msg.textContent = 'Authenticating...';
-  // If Face authentication, ensure camera was prepared
-  if (method === 'Face' && !cameraReady) {
-    if (msg) msg.textContent = 'Please click "Prepare Camera" before signing in with Face.';
-    return;
+  if (msg) msg.textContent = 'Starting passkey authentication...';
+
+  try {
+    await loginPasskey();
+  } catch (e) {
+    if (msg) msg.textContent = 'Passkey authentication failed: ' + (e.message || 'unknown');
   }
-
-  // Choose endpoint based on authentication method
-  const endpoint = method === 'Face' ? '/api/auth/login/face' : '/api/auth/login';
-  let payload = { email, authMethod: method };
-
-  // If Face authentication, capture a webcam snapshot and include it
-  if (method === 'Face') {
-    try {
-      const imageData = await captureFaceImage();
-      payload.image = imageData; // base64 data URL
-    } catch (e) {
-      if (msg) msg.textContent = 'Face capture failed: ' + (e.message || e);
-      return;
-    }
-  }
-
-  const res = await api(endpoint, 'POST', payload);
-
-  if (res.token) {
-    persistAuth(res.token);
-    // Reset camera readiness after a successful login
-    cameraReady = false;
-    if (msg) msg.textContent = res.message || 'Authenticated';
-    redirectToDashboard();
-    return;
-  }
-
-  if (msg) msg.textContent = res.message || 'Sign-in failed.';
 }
 
 async function recoverAccount() {
@@ -241,7 +306,7 @@ function renderBookings(bookingsArray) {
 
   bookingsArray.forEach((booking, idx) => {
     const statusIcon = booking.status === 'Pending' ? '⏳' : booking.status === 'Completed' ? '✅' : '📦';
-    const statusColor = booking.status === 'Pending' ? '#2B8BB8' : booking.status === 'Completed' ? '#22c55e' : '#94a3b8';
+    const statusColor = booking.status === 'Pending' ? '#ff9f43' : booking.status === 'Completed' ? '#22c55e' : '#94a3b8';
     const shortId = (booking._id || '').substring(0, 8).toUpperCase();
     const createdDate = booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : 'N/A';
 
@@ -298,7 +363,7 @@ function renderShipments(shipmentsArray) {
       'default': '📦'
     };
     const statusIcon = statusIcons[shipment.status] || statusIcons['default'];
-    const statusColor = shipment.status === 'In Transit' ? '#2B8BB8' : shipment.status === 'Delivered' ? '#22c55e' : '#94a3b8';
+    const statusColor = shipment.status === 'In Transit' ? '#ff9f43' : shipment.status === 'Delivered' ? '#22c55e' : '#94a3b8';
     const shortId = (shipment._id || '').substring(0, 8).toUpperCase();
     const updatedDate = shipment.updatedAt ? new Date(shipment.updatedAt).toLocaleTimeString() : 'N/A';
 
@@ -573,9 +638,8 @@ async function loadAdminStats() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Reset camera readiness when entering the registration page to enforce preparation per session
-  if (window.location.pathname.includes('/register.html')) {
-    cameraReady = false;
+  if (!checkWebAuthnOrigin()) {
+    return;
   }
 
   if (window.location.pathname.includes('/dashboard.html') && !authToken) {
@@ -598,24 +662,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   document.getElementById('registerBtn')?.addEventListener('click', registerUser);
+  document.getElementById('registerPasskeyBtn')?.addEventListener('click', registerPasskey);
   document.getElementById('loginBtn')?.addEventListener('click', loginUser);
   document.getElementById('recoverBtn')?.addEventListener('click', recoverAccount);
   // Prepare camera button – requests webcam permission ahead of time and sets a flag
-  document.getElementById('prepareCamBtn')?.addEventListener('click', async () => {
-    // Use the appropriate message element based on the current page (login or register)
-    const msg = document.getElementById('loginMsg') || document.getElementById('regMsg');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      // Immediately stop – we only needed the permission prompt
-      stream.getTracks().forEach(t => t.stop());
-      // Remember that permission was granted
-      cameraReady = true;
-      if (msg) msg.textContent = 'Camera ready – you can now use Face authentication.';
-    } catch (e) {
-      cameraReady = false;
-      if (msg) msg.textContent = 'Camera access denied: ' + (e.message || e);
-    }
-  });
+  // Manual camera preparation button removed; permission will be requested automatically when needed.
   document.getElementById('logoutBtn')?.addEventListener('click', logoutUser);
 
   document.querySelectorAll('.inner-tab').forEach((button) => {

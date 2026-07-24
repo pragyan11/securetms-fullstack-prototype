@@ -40,21 +40,22 @@
         <label for="regMethod">Authentication method</label>
         <select id="regMethod">
           <option value="Passkey">Passkey</option>
-          <option value="Face">Face</option>
         </select>
-        <button class="btn btn-secondary" id="prepareCamBtn" type="button">Prepare Camera</button>
 
         <label for="regRecovery">Recovery email</label>
         <input id="regRecovery" type="email" placeholder="Enter recovery email" />
 
-        <button class="btn btn-primary" id="registerBtn" type="button">Create Account</button>
+        <button class="btn btn-primary" id="registerBtn" type="button">Create Account & Register Passkey</button>
         <p id="regMsg" class="message"></p>
-        <!-- Hidden video element for Face capture (mirrors login page) -->
-        <video id="faceVideo" autoplay playsinline style="display:none; width:200px; height:auto; margin-top:10px;"></video>
       </section>
     </main>
   </div>
 
+  <script src="libs/simplewebauthn-browser.umd.min.js"></script>
+  <script src="utils.js"></script>
   <script src="app.js"></script>
+  <script>
+    detectWebAuthnSupport();
+  </script>
 </body>
 </html>

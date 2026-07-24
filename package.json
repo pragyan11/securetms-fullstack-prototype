@@ -5,10 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "dev:server": "nodemon server.js"
   },
   "dependencies": {
-    "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
