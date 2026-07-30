@@ -164,19 +164,6 @@ A live demo of the application is hosted at **[https://securetms-demo.example.co
 
 > *Add the corresponding images to a `screenshots/` folder in the repository.*
 
-## Architecture Overview
-
-```mermaid
-graph LR
-   A[Browser (HTML/CSS/JS)] -->|HTTP| B[Express Server]
-   B -->|Mongoose| C[MongoDB]
-   B -->|WebAuthn/FIDO2| D[Authentication Service]
-   style A fill:#f9f,stroke:#333,stroke-width:2px
-   style B fill:#bbf,stroke:#333,stroke-width:2px
-   style C fill:#bfb,stroke:#333,stroke-width:2px
-   style D fill:#ff9,stroke:#333,stroke-width:2px
-```
-
 ## Usage Walkthrough
 
 1. **Register** a new user via the *Register* page.
