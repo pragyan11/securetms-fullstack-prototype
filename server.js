@@ -15,7 +15,13 @@ const bookingRoutes = require('./routes/bookings');
 const fleetRoutes = require('./routes/fleet');
 const shipmentRoutes = require('./routes/shipments');
 const adminRoutes = require('./routes/admin');
+const adminInviteRoutes = require('./routes/admin-invites');
 const logRoutes = require('./routes/logs');
+const geocodeRoutes = require('./routes/geocode');
+const messageRoutes = require('./routes/messages');
+const maintenanceRoutes = require('./routes/maintenance');
+const emailService = require('./services/email');
+const gpsSim = require('./services/gpsSimulation');
 const Challenge = require('./models/Challenge');
 const User = require('./models/User');
 const Booking = require('./models/Booking');
@@ -24,6 +30,21 @@ const Shipment = require('./models/Shipment');
 const AuditLog = require('./models/AuditLog');
 
 const app = express();
+const { Server } = require('socket.io');
+
+// io is initialised inside startHttpServer; this middleware gives every
+// route handler access to the live Socket.io instance via req.io.
+// It is safe that `io` is null here: no routes are mounted (or reachable)
+// until after startHttpServer() assigns it, so `req.io` is always truthy
+// by the time a route handler runs.
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
+// Make the skeleton-shipment helper available to route handlers.
+app.set('attachSkeletonShipment', attachSkeletonShipment);
+const { isDevMode } = require('./lib/devMode');
 // Winston logger configuration
 const logger = winston.createLogger({
   level: 'info',
@@ -71,7 +92,7 @@ app.use(
         connectSrc: ["'self'", "https://cdn.jsdelivr.net"],
         // Keep other defaults unchanged
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        imgSrc: ["'self'", "data:"],
+        imgSrc: ["'self'", "data:", "https://a.tile.openstreetmap.org", "https://b.tile.openstreetmap.org", "https://c.tile.openstreetmap.org"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
@@ -110,20 +131,37 @@ app.use(express.urlencoded({ extended: true }));
 // Correct rate limiting configuration: use 'max' to specify the request limit per window.
 // The previous 'limit' option was invalid, causing the middleware to block all requests with 429.
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
-app.use(express.static('public'));
 
-// Support extensionless auth routes used by dashboard redirects.
-app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
+// Static assets with strict no-cache for HTML and JS. We pass a
+// `cacheControl` option to express.static so its `send` library emits our
+// header instead of its built-in `public, max-age=0`. The setHeaders hook
+// still runs and we use it to upgrade caching for non-code static assets.
+app.use(express.static('public', {
+  etag: true,
+  lastModified: true,
+  cacheControl: 'no-cache, no-store, must-revalidate',
+  setHeaders: (res, filePath) => {
+    // Long-lived caching only for genuine static assets (CSS, fonts,
+    // images, vendor JS under /libs/). HTML and JS bundles (the app shell
+    // and its modules) keep the strict no-store default above.
+    const lower = String(filePath || '').toLowerCase();
+    if (!lower.endsWith('.html') && !lower.endsWith('.js')) {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
+  }
+}));
 
-app.get('/register', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'register.html'));
-});
-
-// SecureTMS dashboard entry route.
-app.get('/dashboard*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+// Clean routes for the role-based pages. express.static('public') already
+// serves these by name; the explicit handlers just guarantee stable URLs.
+// Cache-Control headers come from the wrapper above (setHeader interceptor).
+const pageHandlers = ['login', 'register', 'dashboard', 'customer', 'driver', 'admin-onboard', 'user_details'];
+pageHandlers.forEach((name) => {
+  app.get('/' + name, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', `${name}.html`));
+  });
+  app.get('/' + name + '.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', `${name}.html`));
+  });
 });
 
 app.use('/api/auth', authRoutes);
@@ -131,7 +169,11 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/fleet', fleetRoutes);
 app.use('/api/shipments', shipmentRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/invites', adminInviteRoutes);
 app.use('/api/logs', logRoutes);
+app.use('/api/geocode', geocodeRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/maintenance', maintenanceRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'SecureTMS API' });
@@ -146,27 +188,84 @@ async function seedDemoData() {
     AuditLog.countDocuments()
   ]);
 
-  if (userCount === 0) {
-    const admin = await User.create({
-      name: 'Ava Reynolds',
-      email: 'admin@securetms.com',
-      role: 'Admin',
-      authMethod: 'Passkey',
-      recoveryEmail: 'recovery@securetms.com'
-    });
-    await User.create({
-      name: 'Liam Carter',
-      email: 'customer@securetms.com',
-      role: 'Customer',
-      authMethod: 'Passkey',
-      recoveryEmail: 'customer-recovery@securetms.com'
-    });
-    await AuditLog.create({
-      userEmail: admin.email,
-      action: 'REGISTER',
-      details: 'Demo admin seeded for SecureTMS operations',
-      ipAddress: '127.0.0.1'
-    });
+  // Seed the canonical demo accounts idempotently (create-if-missing) but
+  // ONLY in dev mode. Production deployments stay empty until real users
+  // register (Customer/Driver) or are invited (Admin). Avoids polluting
+  // production user lists with dangling Passkey-but-no-credentials accounts.
+  // isDevMode() is shared with routes/auth.js — see lib/devMode.js.
+  const devMode = isDevMode();
+  if (devMode) {
+    const demoAccounts = [
+      {
+        name: 'Liam Carter',
+        email: 'customer@securetms.com',
+        role: 'Customer',
+        authMethod: 'Passkey',
+        recoveryEmail: 'customer-recovery@securetms.com'
+      },
+      {
+        name: 'Marcus Lee',
+        email: 'driver@securetms.com',
+        role: 'Driver',
+        authMethod: 'Passkey',
+        recoveryEmail: 'driver-recovery@securetms.com'
+      }
+    ];
+    const createdNow = [];
+    for (const acc of demoAccounts) {
+      if (!(await User.findOne({ email: acc.email }))) {
+        await User.create(acc);
+        createdNow.push(acc.email);
+      }
+    }
+    if (createdNow.length) {
+      logger.info('Seeded demo accounts: ' + createdNow.join(', ') + ' (sign in via the dev login panel when ALLOW_DEV_LOGIN=1 and NODE_ENV != production).');
+    }
+
+    // Demo admin: same gate as the customer/driver seeds above. Without an
+    // admin identity in dev mode there is nothing for the dev-login bypass
+    // to authenticate as for the admin role.
+    //
+    // We use findOneAndUpdate so the seed is idempotent across server
+    // restarts AND repairs stale databases that already had the
+    // admin@securetms.com account from an earlier code path with the wrong
+    // role. Without the repair branch, a database created before the admin
+    // seed was added — or hand-edited during testing — would silently keep
+    // role="Customer" forever, the dev-login panel would mint a Customer
+    // JWT for it, and /dashboard.html's user-chip would render the chip
+    // as if a customer were logged in. role is in $set (always correct
+    // after the call), while name/authMethod/recoveryEmail live in
+    // $setOnInsert so a future rename via the admin UI is never clobbered
+    // by the next server boot. WebAuthn credentials are not touched.
+    const devAdminEmail = 'admin@securetms.com';
+    const devAdmin = await User.findOneAndUpdate(
+      { email: devAdminEmail },
+      {
+        $set: { role: 'Admin' },
+        $setOnInsert: {
+          name: 'Demo Admin',
+          email: devAdminEmail,
+          authMethod: 'Passkey',
+          recoveryEmail: 'admin-recovery@securetms.com'
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).select('email role name');
+    logger.info('Dev admin ready: ' + devAdmin.email + ' \u2014 role=' + devAdmin.role + ', name="' + devAdmin.name + '"');
+  } else {
+    // Production / ambiguous boot: log the skip so operators can confirm a
+    // fresh production DB is intentionally empty.
+    logger.info('Demo seed accounts skipped (NODE_ENV=' + (process.env.NODE_ENV || 'unset') + '; ALLOW_DEV_LOGIN=' + (process.env.ALLOW_DEV_LOGIN || 'unset') + ') — production starts empty until users register or are invited.');
+  }
+
+  // Demo accounts + admin seeding consolidated into the `if (devMode)` block
+  // above to avoid any cross-block-scope variables.
+
+  // The demo bookings, vehicles, shipments and logs below should only be
+  // created on a fresh dev-mode install so production starts empty.
+  if (!devMode) {
+    logger.info('Demo data seeding skipped (NODE_ENV=' + (process.env.NODE_ENV || 'unset') + '; ALLOW_DEV_LOGIN=' + (process.env.ALLOW_DEV_LOGIN || 'unset') + ')');
+    return;
   }
 
   if (bookingCount === 0) {
@@ -174,15 +273,15 @@ async function seedDemoData() {
       {
         userId: (await User.findOne({ role: 'Customer' }))?._id,
         customerName: 'Liam Carter',
-        origin: 'Chicago, IL',
-        destination: 'Detroit, MI',
+        origin: 'Sydney, Australia',
+        destination: 'Melbourne, Australia',
         status: 'Pending'
       },
       {
         userId: (await User.findOne({ role: 'Customer' }))?._id,
         customerName: 'Liam Carter',
-        origin: 'Milwaukee, WI',
-        destination: 'Cleveland, OH',
+        origin: 'Melbourne, Australia',
+        destination: 'Brisbane, Australia',
         status: 'Completed'
       }
     ]);
@@ -194,7 +293,7 @@ async function seedDemoData() {
         vehicleNumber: 'TRK-001',
         vehicleType: 'Truck',
         driverName: 'Marcus Lee',
-        location: 'Chicago Yard',
+        location: 'Sydney, Australia',
         status: 'In Transit',
         updatedAt: new Date()
       },
@@ -202,7 +301,7 @@ async function seedDemoData() {
         vehicleNumber: 'VAN-214',
         vehicleType: 'Van',
         driverName: 'Sofia Cruz',
-        location: 'Detroit Hub',
+        location: 'Melbourne, Australia',
         status: 'Available',
         updatedAt: new Date()
       },
@@ -218,21 +317,40 @@ async function seedDemoData() {
   }
 
   if (shipmentCount === 0) {
+    // Seed shipments are linked to the demo driver so the driver dashboard
+    // has data on a fresh install. driverEmail + driverName both set so the
+    // shipments.js driver filter matches either field.
+    const driver = await User.findOne({ role: 'Driver' });
     await Shipment.create([
       {
-        shipmentId: 'SHP-1001',
+        trackingId: 'SHP-1001',
+        bookingId: (await Booking.findOne({ status: 'Pending' }))?._id,
+        customerId: (await User.findOne({ role: 'Customer' }))?._id,
+        customerName: 'Liam Carter',
         vehicleNumber: 'TRK-001',
-        driverName: 'Marcus Lee',
+        driverName: driver ? driver.name : 'Marcus Lee',
+        driverEmail: driver ? driver.email : null,
+        assignedDriverId: driver ? driver._id : undefined,
+        pickupAddress: 'Sydney, Australia',
+        deliveryAddress: 'Melbourne, Australia',
         status: 'In Transit',
-        location: 'Indiana Corridor',
+        currentLocation: 'Alpine Route',
+        eta: '4h 30m',
         updatedAt: new Date()
       },
       {
-        shipmentId: 'SHP-1002',
+        trackingId: 'SHP-1002',
+        bookingId: (await Booking.findOne({ status: 'Completed' }))?._id,
+        customerId: (await User.findOne({ role: 'Customer' }))?._id,
+        customerName: 'Liam Carter',
         vehicleNumber: 'VAN-214',
         driverName: 'Sofia Cruz',
+        driverEmail: 'sofia@securetms.com',
+        pickupAddress: 'Melbourne, Australia',
+        deliveryAddress: 'Brisbane, Australia',
         status: 'Delivered',
-        location: 'Detroit Hub',
+        currentLocation: 'Brisbane Hub',
+        eta: 'Delivered',
         updatedAt: new Date()
       }
     ]);
@@ -256,16 +374,73 @@ async function seedDemoData() {
   }
 }
 
+async function attachSkeletonShipment(bookingDoc) {
+  try {
+    const driver = await User.findOne({ role: 'Driver' });
+    const vehicle = await Vehicle.findOne({ status: 'Available' });
+    const trackingId = 'SHP-' + String(bookingDoc._id).slice(-6).toUpperCase();
+    // Atomic upsert keyed on bookingId so concurrent POSTs from a double-submit
+    // are idempotent: a second call gets the same shipment back instead of
+    // creating a duplicate with the same trackingId.
+    return await Shipment.findOneAndUpdate(
+      { bookingId: bookingDoc._id },
+      {
+        $setOnInsert: {
+          trackingId,
+          bookingId: bookingDoc._id,
+          customerId: bookingDoc.userId,
+          customerName: bookingDoc.customerName,
+          vehicleNumber: vehicle ? vehicle.vehicleNumber : undefined,
+          driverName: driver ? driver.name : undefined,
+          driverEmail: driver ? driver.email : undefined,
+          assignedDriverId: driver ? driver._id : undefined,
+          pickupAddress: bookingDoc.origin,
+          deliveryAddress: bookingDoc.destination,
+          status: 'Created',
+          currentLocation: 'Awaiting dispatch',
+          eta: 'Pending',
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  } catch (e) {
+    logger.warn('attachSkeletonShipment failed: ' + e.message);
+    return null;
+  }
+}
+
 function startHttpServer(port) {
   const server = app.listen(port, () => {
     logger.info(`Server running on port ${port}`);
   });
 
+  io = new Server(server, {
+    cors: {
+      origin: FRONTEND_ORIGINS,
+      credentials: true
+    }
+  });
+
+  io.on('connection', (socket) => {
+    logger.info(`Client connected: ${socket.id}`);
+
+    socket.on('disconnect', () => {
+      logger.info(`Client disconnected: ${socket.id}`);
+    });
+  });
+
+  // Start live GPS simulation
+  emailService.initTransporter();
+  gpsSim.initGPSSimulation(io);
+
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
-      logger.warn(`Port ${port} is busy. Trying ${port + 1}...`);
-      startHttpServer(port + 1);
-      return;
+      logger.warn(`Port ${port} is busy.`);
+      // Do not auto-retry: a retry would start a second server while the
+      // first is still bound, and callers expect a predictable port. The
+      // operator should free the port or set PORT explicitly.
+      process.exit(1);
     }
 
     logger.error(`Server startup error: ${err.message}`);

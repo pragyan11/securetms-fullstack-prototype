@@ -1,4 +1,12 @@
-// Admin UI helper functions
+// DEPRECATED: public/admin.js is no longer loaded by any page.
+//
+// dashboard.html loads dashboard-page.js instead. This file still contains
+// helpers for an older admin dashboard and makes unauthenticated calls to
+// protected endpoints (e.g. /api/admin/users, /api/fleet) and references
+// removed functions such as loadBookings/loadShipments/loadFleet.
+//
+// Do not import this script. Its functionality should be re-implemented in
+// dashboard-page.js if still needed.
 
 // Load detailed admin user management UI (list, edit, delete, view logs)
 async function loadAdminUsers() {

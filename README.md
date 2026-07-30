@@ -80,6 +80,18 @@ npm install
 
 The entry point is `public/index.html`. Use the navigation bar to explore the dashboard, bookings, fleet, and authentication pages.
 
+### Dev / demo shortcut (bypasses WebAuthn on a fresh install)
+
+A fresh install cannot mint WebAuthn credentials server-side (the browser's authenticator is required for that ceremony), so seeded Customer/Driver/Admin accounts cannot complete the real login flow on their own. To exercise the role-gated pages during local development, set:
+
+```bash
+ALLOW_DEV_LOGIN=1
+```
+
+in `.env` (alongside the existing `MONGO_URI`, `JWT_SECRET`, etc.) and restart `npm start`. The login screen (`/login.html`) will surface a bordered "Dev bypass active" panel with three one-click buttons (Customer / Driver / Admin) that mint the same JWT + cookie the real passkey flow would. When NODE_ENV equals `production`, the panel is hidden server-side and `/api/auth/dev-login` answers `404`, so the bypass is unreachable in any deployment that names itself production.
+
+In production with `ALLOW_DEV_LOGIN` unset (or `NODE_ENV=production`), a fresh MongoDB starts with **zero seeded users**. To bootstrap an admin run `node scripts/seed-admin.js you@example.com` and visit the printed invitation URL; Customer and Driver sign up normally at `/register.html`.
+
 ---
 
 ## Project Structure

@@ -61,10 +61,15 @@ router.get('/users/:id', async (req, res) => {
   }
 });
 
+const VALID_ROLES = ['Admin', 'Customer', 'Driver'];
+
 // Update a user's role (admin only in production)
 router.put('/users/:id', async (req, res) => {
   try {
     const { role } = req.body;
+    if (!role || !VALID_ROLES.includes(role)) {
+      return res.status(400).json({ message: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` });
+    }
     const updated = await User.findByIdAndUpdate(req.params.id, { role }, { new: true });
     if (!updated) return res.status(404).json({ message: 'User not found' });
     res.json(updated);

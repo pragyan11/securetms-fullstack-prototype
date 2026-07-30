@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="SecureTMS — Driver view. Assigned routes, live status updates, digital POD." />
+  <title>SecureTMS — My routes</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10' fill='none' stroke='%230F4C81' stroke-width='1.6'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="/libs/leaflet/leaflet.css" />
+  <style>
+    body.dark { --bg-app:#0F172A; --bg-card:#1E293B; --bg-soft:#1E293B; --border-soft:#334155; --border:#334155; --border-strong:#475569; --text-hi:#F1F5F9; --text:#CBD5E1; --text-muted:#94A3B8; --text-soft:#94A3B8; --text-dim:#64748B; --navy-50:#1E3A5F; --amber-50:#3D2E1A; --green-50:#1A3D2E; --red-50:#3D1A1A; --blue-50:#1A2E4D; }
+    body.dark .sidebar { background:#1E293B; } body.dark .main { background:#0F172A; } body.dark .card,.kpi { background:#1E293B; } body.dark input,select,textarea { background:#334155; border-color:#475569; color:#E2E8F0; }
+    .sig-canvas { border:2px dashed var(--border); border-radius:8px; cursor:crosshair; background:white; width:100%; height:150px; }
+    .checklist-item { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border-soft); }
+    .checklist-item input[type="checkbox"] { width:18px; height:18px; accent-color:var(--navy-700); }
+    .checklist-item.checked span { text-decoration:line-through; color:var(--text-dim); }
+    .route-stop { display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg-soft); border-radius:8px; margin-bottom:6px; }
+    .route-stop .stop-seq { width:28px; height:28px; border-radius:50%; background:var(--navy-700); color:white; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0; }
+    .route-stop .stop-info { flex:1; }
+    .photo-preview { max-width:200px; max-height:150px; border-radius:8px; margin-top:8px; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a href="index.html" class="brand sidebar-brand">
+        <span class="brand-mark"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10"/></svg></span>
+        <strong>Secure<span class="brand-tms">TMS</span></strong>
+      </a>
+      <div class="nav-section">
+        <div class="nav-section-label">Driver</div>
+        <a href="#routes" class="nav-link is-active" data-tab="routesTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12l3-3 3 3 5-5 4 4 3-3"/></svg> My routes
+        </a>
+        <a href="#map" class="nav-link" data-tab="mapTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/><line x1="9" y1="4" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="20"/></svg> Route map
+        </a>
+        <a href="#messages" class="nav-link" data-tab="messagesTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Messages
+        </a>
+        <a href="#completed" class="nav-link" data-tab="completedTab" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 12 l5 5 L20 7"/></svg> Completed
+        </a>
+      </div>
+      <div class="nav-section" style="margin-top:auto;">
+        <button class="theme-toggle" id="themeToggle" type="button" title="Toggle dark mode">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+        <div class="user-chip" id="userChip">
+          <span class="user-chip-avatar" id="userAvatar">DR</span>
+          <div class="user-chip-text"><span class="user-chip-name" id="userName">Driver</span><span class="user-chip-role">Driver</span></div>
+          <div style="display:flex;gap:4px;margin-left:auto;">
+            <a href="user_details.html" class="btn btn-ghost btn-sm" title="My account"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20 a8 8 0 0 1 16 0"/></svg></a>
+            <button id="logoutBtn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="main-header">
+        <div><span class="eyebrow orange">Driver</span><h1 id="pageGreeting">Welcome, driver 👋</h1><p class="sub">Your assigned shipments for today — update status, capture POD, and communicate with dispatch.</p></div>
+        <div style="display:flex;gap:8px;"><button class="btn" id="refreshBtn" type="button"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12 a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3M21 12 a9 9 0 0 1-9 9 9 9 0 0 1-6-2.3M21 4v5h-5M3 20v-5h5"/></svg> Refresh</button>
+          <button class="btn" id="newShipmentBtn" type="button"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 5v14M5 12h14"/></svg> New delivery</button></div>
+      </header>
+
+      <section class="main-body">
+        <div class="kpi-grid">
+          <div class="kpi"><div><div class="kpi-label">Assigned today</div><div class="kpi-value" id="kpiAssigned">—</div></div><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="9" x2="16" y2="9"/></svg></div></div>
+          <div class="kpi"><div><div class="kpi-label">Picked up</div><div class="kpi-value" id="kpiPickedUp">—</div></div><div class="kpi-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="9" width="11" height="9" rx="1"/><path d="M14 12 H19 L22 15 V18 H14 Z"/></svg></div></div>
+          <div class="kpi"><div><div class="kpi-label">Delivered</div><div class="kpi-value" id="kpiDelivered">—</div></div><div class="kpi-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 12 l5 5 L20 7"/></svg></div></div>
+        </div>
+
+        <div class="banner is-info" id="demoBanner" style="display:none;"><span class="banner-icon">i</span><div class="banner-body"><p class="banner-title">Looking for assigned routes?</p><p class="banner-text">If you're new, sign in as <code class="font-mono">driver@securetms.com</code> to see live shipments.</p></div></div>
+
+        <!-- Routes Tab -->
+        <div class="card" id="routesTab"><div class="card-header"><div><div class="card-title">My routes</div><div class="card-sub">Tap a route to expand. Update status, capture POD, and manage your stops.</div></div></div>
+          <div id="routesSkeleton" style="display:flex;flex-direction:column;gap:10px;"><div class="skeleton" style="width:60%"></div><div class="skeleton" style="width:90%"></div></div>
+          <div id="routesOutput" style="display:none;"></div>
+        </div>
+
+        <!-- Map Tab -->
+        <div class="card" style="display:none" id="mapTab"><div class="card-header"><div><div class="card-title">Route map</div><div class="card-sub">Pickup → drop-off for every assigned shipment.</div></div></div>
+          <div class="map-shell"><div id="driverMap" class="map-canvas" style="height:480px;"></div>
+            <div class="map-legend"><span class="legend-item"><span class="legend-dot" style="background:#FF6B35;"></span> Pickup</span><span class="legend-item"><span class="legend-dot" style="background:#0F4C81;"></span> Drop-off</span><span class="legend-item"><span class="legend-dot" style="background:#10B981;"></span> Delivered</span></div></div>
+        </div>
+
+        <!-- Messages Tab -->
+        <div class="card" style="display:none" id="messagesTab"><div class="card-header"><div><div class="card-title">Messages</div></div><button class="btn btn-sm" id="newDriverMsgBtn">+ Message</button></div>
+          <div id="driverMessagesOutput"><div class="empty-state">No messages yet.</div></div>
+          <div id="driverMsgCompose" style="display:none;margin-top:14px;padding:14px;background:var(--bg-soft);border-radius:var(--r-lg);">
+            <div style="display:grid;gap:10px;"><label>To</label><input id="driverMsgTo" placeholder="admin@securetms.com" /><label>Subject</label><input id="driverMsgSubject" /><label>Message</label><textarea id="driverMsgBody" rows="3"></textarea>
+              <div style="display:flex;gap:8px;justify-content:flex-end;"><button class="btn btn-secondary" id="cancelDriverMsgBtn">Cancel</button><button class="btn" id="sendDriverMsgBtn">Send</button></div></div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer"><div style="display:flex;justify-content:space-between;"><span>© SecureTMS</span><span>Driver view</span></div></footer>
+
+      <!-- Shipment Modal -->
+      <div id="shipmentModal" class="modal-overlay" style="display:none;">
+        <div class="modal-card"><div class="modal-header"><div><div class="card-title">New shipment</div></div><button class="btn btn-ghost btn-sm" id="closeShipmentModal">Close</button></div>
+          <form id="modalShipmentForm" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+            <div style="grid-column:1/-1;"><label>Customer name</label><input id="modalShipmentCustomer" required /></div>
+            <div><label>Pickup address</label><input id="modalShipmentPickup" placeholder="12 Bridge St, Sydney" required /></div>
+            <div><label>Delivery address</label><input id="modalShipmentDelivery" placeholder="88 Market Ln, Melbourne" required /></div>
+            <div><label>Vehicle</label><input id="modalShipmentVehicle" placeholder="TRK-001" /></div>
+            <div><label>Status</label><select id="modalShipmentStatus"><option>Created</option><option>Picked Up</option><option>In Transit</option><option>Delivered</option><option>Cancelled</option></select></div>
+            <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary" id="cancelShipmentModalBtn">Cancel</button><button type="submit" class="btn">Create shipment</button></div>
+          </form>
+          <p id="modalShipmentMsg" style="margin-top:10px;font-size:13px;color:var(--text-muted);min-height:18px;"></p>
+        </div>
+      </div>
+
+      <!-- POD Modal -->
+      <div id="podModal" class="modal-overlay" style="display:none;">
+        <div class="modal-card"><div class="modal-header"><div><div class="card-title">Proof of Delivery</div></div><button class="btn btn-ghost btn-sm" id="closePodModal">Close</button></div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:10px;">Sign below to confirm delivery.</p>
+          <canvas id="sigCanvas" class="sig-canvas"></canvas>
+          <div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm btn-secondary" id="clearSigBtn">Clear</button></div>
+          <div style="margin-top:10px;"><label>Photo (optional)</label><input type="file" id="podPhoto" accept="image/*" /><img id="podPhotoPreview" class="photo-preview" style="display:none;" /></div>
+          <label style="margin-top:10px;">Notes</label><input id="podNotes" placeholder="Any delivery notes…" />
+          <button class="btn" id="submitPOD" style="margin-top:14px;width:100%;">Confirm Delivery ✓</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="utils.js" defer></script>
+  <script src="ui-utils.js" defer></script>
+  <script src="app.js" defer></script>
+  <script src="driver-page.js" defer></script>
+  <script src="/libs/leaflet/leaflet.js" defer></script>
+</body>
+</html>

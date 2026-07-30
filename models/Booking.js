@@ -1,11 +1,13 @@
 const mongoose = require('mongoose');
 const BookingSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  pickup: String,
-  drop: String,
-  vehicleType: String,
-  priority: String,
+  customerName: { type: String, required: true },
+  origin: { type: String, required: true },
+  destination: { type: String, required: true },
   status: { type: String, default: 'Pending' },
+  serviceZone: { type: String, default: 'Central' },
+  priority: { type: String, enum: ['Standard', 'Express', 'Priority'], default: 'Standard' },
+  notes: { type: String },
   createdAt: { type: Date, default: Date.now }
 });
 module.exports = mongoose.model('Booking', BookingSchema);

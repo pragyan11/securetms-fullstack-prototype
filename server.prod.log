@@ -1,0 +1,3 @@
+2026-07-27 13:20:13 [INFO] MongoDB connected
+2026-07-27 13:20:13 [INFO] Demo seed accounts skipped (NODE_ENV=production; ALLOW_DEV_LOGIN=unset) — production starts empty until users register or are invited.
+2026-07-27 13:20:13 [INFO] Server running on port 4141

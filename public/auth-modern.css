@@ -1,0 +1,407 @@
+/* ════════════════════════════════════════════════════════════════════════
+   SecureTMS — Auth Pages (login + register) Split-Screen Layout
+   Pairs with theme.css. Provides:
+   - 50/50 split (login) and 55/45 split (register)
+   - Topographic map backdrop on the visual pane
+   - Progress dots for the onboarding flow
+   - Segmented role pill selector
+   - Error shake animation, success checkmark draw-in
+   ════════════════════════════════════════════════════════════════════════ */
+
+.auth-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  position: relative;
+  z-index: 2;
+}
+
+/* ── Bar across the top — small mono system status ────────────────── */
+.auth-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 14px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  z-index: 5;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.auth-topbar .auth-topbar-left { display: flex; align-items: center; gap: 10px; }
+
+/* ── Form card ─────────────────────────────────────────────────────── */
+.auth-form-card {
+  width: min(440px, 100%);
+  position: relative;
+  z-index: 3;
+}
+.auth-form-card.is-wide { width: min(520px, 100%); }
+
+.auth-form-header {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+.auth-form-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 32px;
+  line-height: 1.1;
+  color: var(--text-hi);
+  margin: 0;
+}
+.auth-form-subtitle {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ── Field set ─────────────────────────────────────────────────────── */
+.auth-fields { display: flex; flex-direction: column; gap: 18px; }
+.auth-field  { display: flex; flex-direction: column; gap: 0; }
+.auth-error  {
+  display: none;
+  margin: -8px 0 0;
+  font-size: 12px;
+  color: var(--rose);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  align-items: center;
+  gap: 6px;
+}
+.auth-error.is-visible { display: flex; }
+.auth-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.auth-actions .btn,
+.auth-actions .tt-btn { width: 100%; height: 48px; }
+
+.auth-msg {
+  margin: 0;
+  min-height: 22px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--rose);
+}
+
+/* ── CSS-only chevron for select ───────────────────────────────────── */
+.auth-select-wrap { position: relative; }
+.auth-select-wrap::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid var(--cyan);
+  border-bottom: 1.5px solid var(--cyan);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+.auth-select-wrap select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 36px;
+}
+
+/* ── Success state (after auth) ────────────────────────────────────── */
+.auth-success {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 0;
+}
+.auth-success.is-visible { display: flex; }
+.auth-success-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(16, 185, 129, 0.10);
+  border: 1px solid rgba(16, 185, 129, 0.30);
+}
+.auth-success-icon svg { width: 22px; height: 22px; stroke: var(--emerald); stroke-width: 2; }
+.auth-success-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--emerald);
+  margin: 0;
+}
+.auth-success-detail {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+/* ── Error shake on the form card ────────────────────────────────── */
+@keyframes authShake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-5px); }
+  40%      { transform: translateX(5px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(4px); }
+}
+.auth-shell.is-shaking .auth-form-card { animation: authShake 0.4s ease; }
+.auth-shell.is-shaking input.is-invalid,
+.auth-shell.is-shaking select.is-invalid {
+  border-color: var(--rose);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18);
+}
+
+/* ── Progress dots (Register onboarding stepper) ────────────────── */
+.auth-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(11, 17, 32, 0.55);
+  border: 1px solid var(--border-faint);
+  border-radius: 999px;
+  width: fit-content;
+}
+.auth-progress-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  transition: background 0.22s var(--ease-precise), transform 0.22s var(--ease-precise);
+}
+.auth-progress-dot.is-active {
+  background: var(--cyan);
+  width: 28px;
+  border-radius: 999px;
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.55);
+}
+.auth-progress-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-left: 8px;
+}
+
+/* ── Segmented role pills (Register) ─────────────────────────────── */
+.auth-pill-group {
+  display: flex;
+  gap: 8px;
+  background: rgba(11, 17, 32, 0.50);
+  border: 1px solid var(--border-faint);
+  border-radius: 999px;
+  padding: 4px;
+}
+.auth-pill {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+  padding: 10px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  user-select: none;
+  transition: background 0.20s ease, color 0.20s ease, border-color 0.20s ease, box-shadow 0.20s ease;
+}
+.auth-pill:hover { color: var(--text-hi); }
+.auth-pill.is-selected {
+  background: var(--cyan);
+  color: var(--cyan-ink);
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.30);
+}
+.auth-pill input { display: none; }
+
+/* ── Topographic map visualization in right pane ─────────────────── */
+.tt-topo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.tt-topo-grid line,
+.tt-topo path { stroke: rgba(34, 211, 238, 0.10); stroke-width: 0.8; fill: none; }
+.tt-topo-landmass      { fill: rgba(34, 211, 238, 0.04); stroke: rgba(34, 211, 238, 0.18); stroke-width: 1; }
+.tt-topo-glow          { fill: none; stroke: rgba(34, 211, 238, 0.25); stroke-width: 0.6; filter: blur(0.4px); }
+
+/* "Spot pin" placed on the right-pane map — shows a secure endpoint */
+.tt-topo-pin {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(11, 17, 32, 0.75);
+  border: 1px solid var(--border-hot);
+  border-radius: var(--r-md);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+.tt-topo-pin::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan);
+  flex-shrink: 0;
+}
+.tt-topo-pin strong { color: var(--text-hi); font-weight: 600; }
+
+/* Floating factoids top-right */
+.tt-topo-fact {
+  position: absolute;
+  left: 32px;
+  bottom: 32px;
+  right: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  z-index: 3;
+}
+.tt-topo-fact .tt-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 18px;
+  background: rgba(11, 17, 32, 0.55);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--r-md);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.tt-topo-fact .tt-fact .tt-fact-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.tt-topo-fact .tt-fact .tt-fact-value {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-hi);
+}
+
+/* Variant for credential card (register page visual) */
+.tt-credential {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-3deg);
+  width: min(360px, 80%);
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.78), rgba(11, 17, 32, 0.92));
+  border: 1px solid var(--border-hot);
+  border-radius: 18px;
+  padding: 22px 24px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 24px rgba(34, 211, 238, 0.18);
+  z-index: 3;
+}
+.tt-credential::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 12px, rgba(34, 211, 238, 0.04) 12px 13px);
+  pointer-events: none;
+}
+.tt-credential-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+.tt-credential-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-hi);
+  margin: 6px 0 14px;
+}
+.tt-credential-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-soft);
+  margin-bottom: 18px;
+}
+.tt-credential-rows div { display: flex; justify-content: space-between; gap: 8px; }
+.tt-credential-rows div span:first-child { color: var(--text-dim); }
+.tt-credential-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(34, 211, 238, 0.10);
+  border: 1px solid rgba(34, 211, 238, 0.30);
+  color: var(--cyan);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+.tt-credential-chip::before {
+  content: '';
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan);
+  animation: ttPillPulse 2s ease-out infinite;
+}
+
+/* ── Top section utilities (foot of form / "Already have credentials") ─ */
+.auth-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.auth-foot-link {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--cyan);
+  text-decoration: none;
+  transition: color 0.18s ease, text-decoration 0.18s ease;
+}
+.auth-foot-link:hover { color: var(--text-hi); text-decoration: underline; }
+.auth-foot-mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+}
+
+/* ── Login / Register mobile fallback (parent split-screen collapses via theme.css) ── */

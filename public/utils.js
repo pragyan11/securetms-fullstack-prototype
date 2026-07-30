@@ -10,12 +10,16 @@ function hideSpinner() {
   if (el) el.style.display = 'none';
 }
 
-// Detect WebAuthn (Passkey) support. If not supported, hide Passkey UI elements.
+// Detect WebAuthn (Passkey) support. If not supported, hide Passkey UI elements
+// and surface a clear message instead of falling back to a deprecated flow.
 function detectWebAuthnSupport() {
   if (!window.PublicKeyCredential) {
-    // Hide all elements marked with data-passkey attribute
     document.querySelectorAll('[data-passkey]').forEach(el => el.style.display = 'none');
-    alert('Your browser does not support WebAuthn Passkeys. Please use Face login instead.');
+    const m = document.getElementById('loginMsg') || document.getElementById('regMsg');
+    if (m) {
+      m.textContent = 'This browser does not support WebAuthn / FIDO2 passkeys. Use a modern browser (Chrome, Safari, Firefox, Edge) to authenticate.';
+      m.style.color = 'var(--red-600, #DC2626)';
+    }
   }
 }
 

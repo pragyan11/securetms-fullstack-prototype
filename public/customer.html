@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="SecureTMS — Customer view. Track parcels, book pickups, watch live routes." />
+  <title>SecureTMS — My deliveries</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10' fill='none' stroke='%230F4C81' stroke-width='1.6'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="/libs/leaflet/leaflet.css" />
+  <style>
+    /* ── Customer World-Class Additions ── */
+    body.dark { --bg-app:#0F172A; --bg-card:#1E293B; --bg-soft:#1E293B; --border-soft:#334155; --border:#334155; --border-strong:#475569; --text-hi:#F1F5F9; --text:#CBD5E1; --text-muted:#94A3B8; --text-soft:#94A3B8; --text-dim:#64748B; --navy-50:#1E3A5F; --amber-50:#3D2E1A; --green-50:#1A3D2E; --red-50:#3D1A1A; --blue-50:#1A2E4D; }
+    body.dark .sidebar { background:#1E293B; } body.dark .main { background:#0F172A; }
+    body.dark .card,.kpi { background:#1E293B; } body.dark input,select,textarea { background:#334155; border-color:#475569; color:#E2E8F0; }
+    .status-stepper { display:flex; gap:0; margin:20px 0; position:relative; }
+    .status-stepper .step { flex:1; text-align:center; position:relative; padding:0 4px; }
+    .status-stepper .step::after { content:''; position:absolute; top:16px; left:50%; width:100%; height:3px; background:var(--border); z-index:0; }
+    .status-stepper .step:last-child::after { display:none; }
+    .status-stepper .step .step-circle { width:32px; height:32px; border-radius:50%; background:var(--border-soft); border:3px solid var(--border); display:flex; align-items:center; justify-content:center; margin:0 auto 8px; position:relative; z-index:1; font-size:13px; font-weight:700; color:var(--text-dim); transition:all 0.3s; }
+    .status-stepper .step.completed .step-circle { background:var(--green-500); border-color:var(--green-500); color:white; }
+    .status-stepper .step.completed::after { background:var(--green-500); }
+    .status-stepper .step.active .step-circle { background:var(--navy-700); border-color:var(--navy-700); color:white; box-shadow:0 0 0 4px rgba(15,76,129,0.2); }
+    .status-stepper .step .step-label { font-size:11px; font-weight:600; color:var(--text-muted); }
+    .status-stepper .step.completed .step-label, .status-stepper .step.active .step-label { color:var(--text-hi); }
+    .eta-countdown { display:flex; align-items:center; gap:10px; padding:14px 18px; background:var(--navy-50); border-radius:var(--r-lg); margin:16px 0; border:1px solid var(--navy-50); }
+    .eta-countdown .eta-icon { font-size:28px; }
+    .eta-countdown .eta-timer { font-size:28px; font-weight:700; color:var(--navy-700); font-variant-numeric:tabular-nums; }
+    .eta-countdown .eta-label { font-size:12px; color:var(--text-muted); }
+    .rating-stars { display:flex; gap:2px; cursor:pointer; }
+    .rating-stars .star { font-size:24px; color:var(--border-strong); transition:color 0.15s; }
+    .rating-stars .star.filled { color:var(--amber-500); }
+    .rating-stars .star:hover { color:var(--amber-600); }
+    .share-btn { display:inline-flex; align-items:center; gap:6px; }
+    .copy-toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--navy-800); color:white; padding:12px 24px; border-radius:var(--r-pill); font-size:13px; z-index:999; opacity:0; transition:opacity 0.2s; }
+    .copy-toast.show { opacity:1; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a href="index.html" class="brand sidebar-brand">
+        <span class="brand-mark"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10"/></svg></span>
+        <strong>Secure<span class="brand-tms">TMS</span></strong>
+      </a>
+      <div class="nav-section">
+        <div class="nav-section-label">Customer</div>
+        <a href="#deliveries" class="nav-link is-active" data-tab="deliveriesTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="14" y2="13"/></svg>
+          My deliveries
+        </a>
+        <a href="#book" class="nav-link" data-tab="bookTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          Book a pickup
+        </a>
+        <a href="#map" class="nav-link" data-tab="mapTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/><line x1="9" y1="4" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="20"/></svg>
+          Track on map
+        </a>
+        <a href="#messages" class="nav-link" data-tab="messagesTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Messages
+        </a>
+      </div>
+      <div class="nav-section" style="margin-top:auto;">
+        <button class="theme-toggle" id="themeToggle" type="button" title="Toggle dark mode" aria-label="Toggle theme">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg></button>
+        <div class="user-chip" id="userChip" aria-haspopup="menu">
+          <span class="user-chip-avatar" id="userAvatar">CU</span>
+          <div class="user-chip-text">
+            <span class="user-chip-name" id="userName">Customer</span>
+            <span class="user-chip-role">Customer</span>
+          </div>
+          <div style="display:flex;gap:4px;margin-left:auto;">
+            <a href="user_details.html" class="btn btn-ghost btn-sm" title="My account"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 20 a8 8 0 0 1 16 0"/></svg></a>
+            <button id="logoutBtn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="main-header">
+        <div>
+          <span class="eyebrow">Customer</span>
+          <h1 id="pageGreeting">Hi there 👋</h1>
+          <p class="sub">Your parcels, the trucks delivering them, and the live route — all in one place.</p>
+        </div>
+        <button class="btn" id="newBookingBtn" type="button"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 5v14M5 12h14"/></svg> New delivery</button>
+      </header>
+
+      <section class="main-body">
+        <div class="kpi-grid">
+          <div class="kpi"><div><div class="kpi-label">Active deliveries</div><div class="kpi-value" id="kpiActive">—</div></div><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="9" width="11" height="9" rx="1"/><path d="M14 12 H19 L22 15 V18 H14 Z"/><circle cx="7" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg></div></div>
+          <div class="kpi"><div><div class="kpi-label">In transit</div><div class="kpi-value" id="kpiTransit">—</div></div><div class="kpi-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h18M12 3v18"/></svg></div></div>
+          <div class="kpi"><div><div class="kpi-label">Delivered</div><div class="kpi-value" id="kpiDelivered">—</div></div><div class="kpi-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 12 l5 5 L20 7"/></svg></div></div>
+        </div>
+
+        <div class="banner is-info" id="demoBanner" style="display:none;">
+          <span class="banner-icon">i</span>
+          <div class="banner-body"><p class="banner-title">Welcome to your SecureTMS customer view.</p><p class="banner-text">Your deliveries appear below as soon as the operations team assigns a route.</p></div>
+        </div>
+
+        <!-- Deliveries Tab -->
+        <div class="card" id="deliveriesTab">
+          <div class="card-header"><div><div class="card-title">My deliveries</div><div class="card-sub">Each row shows the truck or vehicle currently carrying your parcel.</div></div><button class="btn btn-secondary btn-sm" id="refreshBtn" type="button">Refresh</button></div>
+          <div id="deliveriesSkeleton" style="display:flex;flex-direction:column;gap:10px;"><div class="skeleton" style="width:60%"></div><div class="skeleton" style="width:90%"></div><div class="skeleton" style="width:75%"></div></div>
+          <div id="deliveriesOutput" style="display:none;"></div>
+        </div>
+
+        <!-- Book Tab -->
+        <div class="card" style="display:none" id="bookTab">
+          <div class="card-header"><div><div class="card-title">Book a new pickup</div><div class="card-sub">A driver and vehicle will be assigned once your booking is confirmed.</div></div></div>
+          <form id="bookingForm" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <div style="grid-column:1/-1;"><label for="bookingCustomer">Your name</label><input id="bookingCustomer" type="text" required /></div>
+            <div><label for="bookingOrigin">Pickup address</label><input id="bookingOrigin" type="text" placeholder="e.g. 12 Bridge St, Sydney" autocomplete="off" required /></div>
+            <div><label for="bookingDestination">Drop-off address</label><input id="bookingDestination" type="text" placeholder="e.g. 88 Market Ln, Melbourne" autocomplete="off" required /></div>
+            <div><label for="bookingZone">Service zone</label><select id="bookingZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
+            <div><label for="bookingPriority">Priority</label><select id="bookingPriority"><option value="Standard">Standard</option><option value="Express">Express</option><option value="Priority">Priority</option></select></div>
+            <div style="grid-column:1/-1;"><label for="bookingNotes">Notes (optional)</label><textarea id="bookingNotes" rows="2"></textarea></div>
+            <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
+              <button type="button" class="btn btn-secondary" id="cancelBookingBtn">Cancel</button>
+              <button type="submit" class="btn">Create booking</button>
+            </div>
+          </form>
+          <p id="bookingMsg" style="margin-top:10px;font-size:13px;color:var(--text-muted);min-height:18px;" role="status" aria-live="polite"></p>
+        </div>
+
+        <!-- Map Tab -->
+        <div class="card" style="display:none" id="mapTab">
+          <div class="card-header"><div><div class="card-title">Live tracking</div><div class="card-sub">See the current position of every vehicle carrying your parcel.</div></div></div>
+          <div class="map-shell"><div id="customerMap" class="map-canvas" style="height:480px;"></div>
+            <div class="map-legend"><span class="legend-item"><span class="legend-dot" style="background:#FF6B35;"></span> Pickup</span><span class="legend-item"><span class="legend-dot" style="background:#0F4C81;"></span> Drop-off</span><span class="legend-item"><span class="legend-dot" style="background:#10B981;"></span> Delivered</span></div>
+          </div>
+        </div>
+
+        <!-- Messages Tab -->
+        <div class="card" style="display:none" id="messagesTab">
+          <div class="card-header"><div><div class="card-title">Messages</div><div class="card-sub">Communicate with dispatch and drivers.</div></div><button class="btn btn-sm" id="newMsgBtn">+ New Message</button></div>
+          <div id="messagesOutput"><div class="empty-state">No messages yet.</div></div>
+          <div id="msgCompose" style="display:none;margin-top:14px;padding:14px;background:var(--bg-soft);border-radius:var(--r-lg);">
+            <div style="display:grid;gap:10px;"><label>To (email)</label><input id="msgTo" placeholder="driver@securetms.com" /><label>Subject</label><input id="msgSubject" placeholder="Question about my shipment" /><label>Message</label><textarea id="msgBody" rows="3" placeholder="Type your message…"></textarea>
+              <div style="display:flex;gap:8px;justify-content:flex-end;"><button class="btn btn-secondary" id="cancelMsgBtn">Cancel</button><button class="btn" id="sendMsgBtn">Send</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;"><span>© SecureTMS — Secured by FIDO2 / WebAuthn</span><span>Customer view</span></div></footer>
+
+      <!-- Booking Modal -->
+      <div id="bookingModal" class="modal-overlay" style="display:none;" aria-hidden="true">
+        <div class="modal-card"><div class="modal-header"><div><div class="card-title">Book a new pickup</div></div><button class="btn btn-ghost btn-sm" id="closeBookingModal" type="button">Close</button></div>
+          <form id="modalBookingForm" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+            <div style="grid-column:1/-1;"><label for="modalBookingCustomer">Your name</label><input id="modalBookingCustomer" type="text" required /></div>
+            <div><label for="modalBookingOrigin">Pickup address</label><input id="modalBookingOrigin" type="text" placeholder="e.g. 12 Bridge St, Sydney" autocomplete="off" required /></div>
+            <div><label for="modalBookingDestination">Drop-off address</label><input id="modalBookingDestination" type="text" placeholder="e.g. 88 Market Ln, Melbourne" autocomplete="off" required /></div>
+            <div><label for="modalBookingZone">Service zone</label><select id="modalBookingZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
+            <div><label for="modalBookingPriority">Priority</label><select id="modalBookingPriority"><option value="Standard">Standard</option><option value="Express">Express</option><option value="Priority">Priority</option></select></div>
+            <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary" id="cancelBookingModalBtn">Cancel</button><button type="submit" class="btn">Create booking</button></div>
+          </form>
+          <p id="modalBookingMsg" style="margin-top:10px;font-size:13px;color:var(--text-muted);min-height:18px;" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <!-- Rating Modal -->
+      <div id="ratingModal" class="modal-overlay" style="display:none;" aria-hidden="true">
+        <div class="modal-card"><div class="modal-header"><div><div class="card-title">Rate your delivery</div></div><button type="button" class="btn btn-ghost btn-sm" data-close-modal="ratingModal">Close</button></div>
+          <div style="text-align:center;padding:20px 0;"><div class="rating-stars" id="ratingStars" style="justify-content:center;"></div><textarea id="ratingComment" rows="2" placeholder="Tell us about your experience…" style="margin-top:14px;"></textarea>
+            <button class="btn" id="submitRating" style="margin-top:14px;">Submit Rating</button></div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div class="copy-toast" id="copyToast">Link copied!</div>
+
+  <script src="utils.js" defer></script>
+  <script src="ui-utils.js" defer></script>
+  <script src="app.js" defer></script>
+  <script src="customer-page.js" defer></script>
+  <script src="/libs/leaflet/leaflet.js" defer></script>
+</body>
+</html>

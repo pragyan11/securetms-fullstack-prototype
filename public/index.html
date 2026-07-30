@@ -3,81 +3,443 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="SecureTMS – a full‑stack prototype for passwordless transport management with a modern dashboard and WebAuthn authentication." />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔒</text></svg>" />
-  <title>SecureTMS – Secure Transport Management</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <meta name="description" content="SecureTMS — passwordless transport management built on FIDO2 / WebAuthn. Bookings, fleet, shipments, audit-grade dashboard." />
+  <meta property="og:title" content="SecureTMS — Secure Transport Management" />
+  <meta property="og:description" content="A passwordless command center for logistics. FIDO2 first." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10' fill='none' stroke='%2322D3EE' stroke-width='1.6'/%3E%3C/svg%3E" />
+  <title>SecureTMS — Secure Transport Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js" defer></script>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="index-modern.css" />
 </head>
 <body>
-  <div class="app">
-    <header class="topbar">
-      <a class="brand" href="index.html">Secure<span>TMS</span></a>
-      <nav>
-        <a href="index.html">Home</a>
-        <a href="register.html">Register</a>
-        <a href="login.html">Login</a>
-        <a href="dashboard.html">Dashboard</a>
-      </nav>
-    </header>
-
-    <main class="container">
-      <!-- Professional welcome card matching dashboard theme -->
-      <section class="card dashboard-card home-welcome" id="homeWelcome">
-        <div class="dashboard-header">
-          <div>
-            <p class="eyebrow">Welcome to SecureTMS</p>
-            <h2>Secure Transport Management</h2>
-          </div>
-          <button class="btn btn-secondary" id="logoutBtn" type="button" style="display:none;">Logout</button>
-        </div>
-        <div class="output-panel">
-          <p class="hero-text">
-            A modern, password‑less platform for bookings, fleet control, shipments, and admin oversight.
-          </p>
-          <div class="button-group">
-            <a class="btn btn-primary" href="login.html">Login</a>
-            <a class="btn btn-secondary" href="register.html">Create Account</a>
-          </div>
-        </div>
-      </section>
-
-      <section class="stats-grid">
-        <article class="stat-card">
-          <span class="stat-label">Customer Bookings</span>
-          <strong class="stat-value">Live</strong>
-          <p>Coordinate requests, approvals, and delivery updates with confidence.</p>
-        </article>
-        <article class="stat-card">
-          <span class="stat-label">Fleet Management</span>
-          <strong class="stat-value">Visible</strong>
-          <p>Track vehicle status, location, and readiness through one view.</p>
-        </article>
-        <article class="stat-card">
-          <span class="stat-label">Secure Authentication</span>
-          <strong class="stat-value">Passkey</strong>
-          <p>Adopt a modern, passwordless experience for all users and admins.</p>
-        </article>
-      </section>
-
-      <section class="module-grid">
-        <article class="card module-card">
-          <p class="eyebrow">Bookings</p>
-          <h2>Customer booking command center</h2>
-          <p class="card-text">Capture requests, monitor progress, and align each movement to an accountable workflow.</p>
-          <a class="btn btn-secondary" href="dashboard.html">Open operations console</a>
-        </article>
-
-        <article class="card module-card">
-          <p class="eyebrow">Fleet</p>
-          <h2>Vehicle visibility and movement</h2>
-          <p class="card-text">Review each vehicle’s condition, assignment, and location in a clean and reliable interface.</p>
-          <a class="btn btn-secondary" href="dashboard.html">Review fleet overview</a>
-        </article>
-      </section>
-    </main>
+  <!-- Preloader (drawn-out logo) -->
+  <div class="hm-preloader" aria-hidden="true">
+    <svg class="hm-preloader-logo" viewBox="0 0 220 32" fill="none">
+      <line x1="6"  y1="6"  x2="6"  y2="26"/>
+      <line x1="6"  y1="6"  x2="22" y2="6"/>
+      <line x1="6"  y1="26" x2="22" y2="26"/>
+      <line x1="22" y1="6"  x2="22" y2="26"/>
+      <line x1="14" y1="6"  x2="14" y2="26"/>
+      <text x="32" y="22" font-size="18" font-family="Inter, system-ui, sans-serif" font-weight="700">SecureTMS</text>
+    </svg>
+    <div class="hm-preloader-status">Securing session</div>
   </div>
 
-  <script src="app.js"></script>
+  <!-- Sticky nav -->
+  <header class="hm-nav">
+    <a class="hm-brand" href="index.html" aria-label="SecureTMS home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z"/>
+        <path d="M9 12 L11 14 L15 10"/>
+      </svg>
+      <strong>SecureTMS</strong>
+    </a>
+    <nav aria-label="Primary">
+      <ul class="hm-nav-links">
+        <li><a href="index.html" class="is-active">Home</a></li>
+        <li><a href="#deeper">Features</a></li>
+        <li><a href="dashboard.html">Dashboard</a></li>
+      </ul>
+    </nav>
+    <div class="hm-nav-cta">
+      <a class="hm-btn hm-btn-primary"   href="register.html">Register</a>
+      <a class="hm-btn hm-btn-secondary" href="login.html">Login</a>
+    </div>
+  </header>
+
+  <!-- Hero: 55/45 split -->
+  <section class="hm-hero">
+    <div class="hm-hero-blobs" aria-hidden="true">
+      <div class="hm-hero-blob"></div>
+      <div class="hm-hero-blob"></div>
+      <div class="hm-hero-blob"></div>
+    </div>
+    <div class="hm-hero-text">
+      <span class="hm-eyebrow hm-hero-eyebrow" style="letter-spacing:0.10em;text-transform:uppercase">Transport Security Platform</span>
+      <h1 class="hm-headline is-word-fade">
+        <span class="hm-word-amber">Secure</span>
+        <span class="hm-word-inner">Transport</span>
+        <span class="hm-word-inner">Management</span>
+      </h1>
+      <p class="hm-subline">
+        A modern, passwordless platform for bookings, fleet control, shipments, and admin oversight.
+      </p>
+      <div class="hm-hero-cta">
+        <a class="hm-btn hm-btn-primary"   href="register.html" data-ss-magnetic>Register</a>
+        <a class="hm-btn hm-btn-secondary" href="login.html"    data-ss-magnetic>Login</a>
+      </div>
+    </div>
+    <div class="hm-hero-illu" aria-hidden="true">
+      <div class="hm-aura"></div>
+      <svg viewBox="0 0 480 360" fill="none">
+        <g stroke="#22D3EE" stroke-opacity="0.12" stroke-width="0.6">
+          <line x1="40"  y1="280" x2="240" y2="160"/><line x1="240" y1="160" x2="440" y2="280"/>
+          <line x1="40"  y1="320" x2="240" y2="200"/><line x1="240" y1="200" x2="440" y2="320"/>
+          <line x1="80"  y1="260" x2="280" y2="140"/><line x1="280" y1="140" x2="480" y2="260"/>
+          <line x1="120" y1="240" x2="320" y2="120"/><line x1="320" y1="120" x2="520" y2="240"/>
+          <line x1="160" y1="220" x2="360" y2="100"/><line x1="360" y1="100" x2="560" y2="220"/>
+          <line x1="200" y1="200" x2="400" y2="80"/><line x1="400" y1="80"  x2="600" y2="200"/>
+          <line x1="240" y1="200" x2="240" y2="160"/><line x1="280" y1="180" x2="280" y2="140"/>
+          <line x1="320" y1="160" x2="320" y2="120"/><line x1="360" y1="140" x2="360" y2="100"/>
+        </g>
+        <g stroke="#22D3EE" stroke-width="1.4">
+          <polygon points="220,160 250,140 280,160 250,180"/>
+          <line x1="250" y1="140" x2="250" y2="40"/>
+          <circle cx="250" cy="30" r="14"/>
+          <circle cx="250" cy="30" r="6" fill="#22D3EE"/>
+          <path d="M250 30 m-20 0 a20 20 0 0 1 40 0" stroke-opacity="0.5"/>
+          <path d="M250 30 m-32 0 a32 32 0 0 1 64 0" stroke-opacity="0.3"/>
+          <rect x="240" y="160" width="40" height="6"/>
+        </g>
+        <g transform="translate(110 230)" stroke-width="1.4">
+          <rect x="0" y="0" width="60" height="20" stroke="#94A3B8"/>
+          <rect x="60" y="6" width="20" height="14" stroke="#94A3B8"/>
+          <circle cx="14" cy="22" r="5"  fill="#22D3EE"/>
+          <circle cx="54" cy="22" r="5"  fill="#22D3EE"/>
+          <circle cx="72" cy="22" r="5"  fill="#22D3EE"/>
+        </g>
+        <g transform="translate(310 90)" stroke="#F59E0B" stroke-width="1.6">
+          <path d="M40 0 L80 14 V40 C80 60 60 70 40 74 C20 70 0 60 0 40 V14 Z"/>
+          <path d="M22 38 L36 50 L60 26"/>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <!-- Trust marquee -->
+  <section class="hm-trust" aria-label="Trusted operators">
+    <div class="hm-trust-label" style="letter-spacing:0.12em;text-transform:uppercase;font-weight:600;color:var(--text-dim)">Trusted by logistics operators worldwide</div>
+    <div class="hm-trust-marquee" aria-hidden="true">
+      <span>NORTHWIND · COURIER</span><span>· ATLAS FREIGHT</span>
+      <span>· BLUEPRINT LOGISTICS</span><span>· SENTINEL WHEELS</span>
+      <span>· MERIDIAN SHIPPING</span><span>· KESTREL HAULAGE</span>
+      <span>· VANTAGE TRANSIT</span><span>· OAKWOOD EXPRESS</span>
+      <span>· NORTHWIND · COURIER</span><span>· ATLAS FREIGHT</span>
+      <span>· BLUEPRINT LOGISTICS</span><span>· SENTINEL WHEELS</span>
+      <span>· MERIDIAN SHIPPING</span><span>· KESTREL HAULAGE</span>
+      <span>· VANTAGE TRANSIT</span><span>· OAKWOOD EXPRESS</span>
+    </div>
+  </section>
+
+  <!-- Wave divider -->
+  <div class="hm-divider" aria-hidden="true">
+    <svg viewBox="0 0 1440 80" preserveAspectRatio="none">
+      <path d="M0 60 Q 360 20, 720 50 T 1440 40"/>
+      <path d="M0 70 Q 360 30, 720 60 T 1440 50" stroke-opacity="0.18"/>
+    </svg>
+  </div>
+
+  <!-- Features bento (3 cards) -->
+  <section class="hm-section">
+    <div class="hm-reveal">
+      <p class="hm-section-eyebrow">Platform pillars</p>
+      <h2 class="hm-section-title">Built for ground-truth logistics.</h2>
+      <p class="hm-section-lede">Three pillars: live, visible, passkey-secure. Each one sharp — none lead with theater.</p>
+    </div>
+    <div class="hm-bento">
+      <article class="hm-feature" data-card="live" data-tilt>
+        <div class="hm-feature-body">
+          <div class="hm-feature-icon">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" aria-hidden="true" focusable="false" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="8" y="6" width="28" height="34" rx="2"/>
+              <line x1="14" y1="14" x2="30" y2="14"/>
+              <line x1="14" y1="20" x2="30" y2="20"/>
+              <line x1="14" y1="26" x2="24" y2="26"/>
+              <circle cx="36" cy="34" r="3" fill="#10B981" stroke="none"/>
+            </svg>
+          </div>
+          <span class="hm-feature-tag">Customer Bookings</span>
+          <h3 class="hm-feature-title">Live</h3>
+          <p class="hm-feature-blurb">Coordinate requests, approvals, and delivery updates with confidence across every service zone.</p>
+        </div>
+      </article>
+      <article class="hm-feature" data-card="visible" data-tilt>
+        <div class="hm-feature-body">
+          <div class="hm-feature-icon">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" aria-hidden="true" focusable="false" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="20" width="26" height="14" rx="1"/>
+              <rect x="30" y="24" width="10" height="10" rx="1"/>
+              <circle cx="12" cy="38" r="3"/><circle cx="26" cy="38" r="3"/><circle cx="36" cy="38" r="3"/>
+              <circle cx="36" cy="14" r="3"/>
+              <path d="M36 8 a8 8 0 0 1 8 8" stroke-dasharray="2 2"/>
+              <path d="M36 4 a12 12 0 0 1 12 12" stroke-dasharray="2 2"/>
+            </svg>
+          </div>
+          <span class="hm-feature-tag">Fleet Management</span>
+          <h3 class="hm-feature-title">Visible</h3>
+          <p class="hm-feature-blurb">Track vehicle status, location, and readiness through one view — radar-tight, signal-rich.</p>
+          <div class="hm-feature-route">
+            <svg viewBox="0 0 600 60" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+              <path d="M0 50 Q 200 4, 400 28 T 600 18"/>
+            </svg>
+          </div>
+        </div>
+      </article>
+      <article class="hm-feature" data-card="passkey" data-tilt>
+        <div class="hm-feature-body">
+          <div class="hm-feature-icon">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" aria-hidden="true" focusable="false" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 26 v-4 c0-8 4-12 8-12 s8 4 8 12 v4"/>
+              <rect x="10" y="22" width="28" height="20" rx="2"/>
+              <circle cx="24" cy="32" r="3"/>
+              <path d="M24 35 v6"/>
+            </svg>
+          </div>
+          <span class="hm-feature-tag">Secure Authentication</span>
+          <h3 class="hm-feature-title">Passkey</h3>
+          <p class="hm-feature-blurb">Adopt a modern, passwordless experience — FIDO2 / WebAuthn, biometric-ready, phishing-resistant.</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Wave divider -->
+  <div class="hm-divider" aria-hidden="true">
+    <svg viewBox="0 0 1440 80" preserveAspectRatio="none">
+      <path d="M0 50 Q 360 80, 720 40 T 1440 60"/>
+    </svg>
+  </div>
+
+  <!-- Deep-dive A: dashboard mockup + checklist -->
+  <section class="hm-deeper" id="deeper">
+    <div class="hm-deeper-visual">
+      <div class="hm-deeper-mockup">
+        <svg viewBox="0 0 540 360" preserveAspectRatio="xMidYMid meet">
+          <rect x="0" y="0" width="540" height="34" fill="#0B1120"/>
+          <circle cx="20" cy="17" r="5" fill="#22D3EE"/>
+          <text x="34" y="22" fill="#94A3B8" font-family="Inter,system-ui" font-size="11">SecureTMS · Dashboard</text>
+          <rect x="500" y="9" width="28" height="16" rx="8" fill="rgba(34,211,238,0.12)" stroke="rgba(34,211,238,0.4)"/>
+          <text x="514" y="20" fill="#22D3EE" font-family="Inter" font-size="9">LIVE</text>
+          <rect x="0" y="34" width="120" height="326" fill="rgba(2,6,23,0.6)"/>
+          <g font-family="Inter" font-size="10">
+            <text x="14" y="62"  fill="#94A3B8">⌂   Home</text>
+            <text x="14" y="92"  fill="#22D3EE">▫   Bookings</text>
+            <text x="14" y="122" fill="#94A3B8">⌗   Shipments</text>
+            <text x="14" y="152" fill="#94A3B8">▴   Fleet</text>
+            <text x="14" y="182" fill="#94A3B8">⊞   Order Board</text>
+            <text x="14" y="212" fill="#94A3B8">◎   Live Map</text>
+            <text x="14" y="242" fill="#94A3B8">⎙   Logs</text>
+          </g>
+          <rect x="140" y="50" width="92" height="60" rx="8" fill="rgba(15,23,42,0.6)" stroke="rgba(148,163,184,0.12)"/>
+          <rect x="240" y="50" width="92" height="60" rx="8" fill="rgba(15,23,42,0.6)" stroke="rgba(148,163,184,0.12)"/>
+          <rect x="340" y="50" width="92" height="60" rx="8" fill="rgba(15,23,42,0.6)" stroke="rgba(148,163,184,0.12)"/>
+          <rect x="440" y="50" width="92" height="60" rx="8" fill="rgba(15,23,42,0.6)" stroke="rgba(148,163,184,0.12)"/>
+          <g font-family="Inter">
+            <text x="150" y="70"  fill="#64748B" font-size="8"  letter-spacing="0.10em">BOOKINGS</text>
+            <text x="150" y="92"  fill="#F8FAFC" font-size="22" font-weight="700">128</text>
+            <text x="200" y="92"  fill="#10B981" font-size="9">↗+12%</text>
+            <text x="250" y="70"  fill="#64748B" font-size="8"  letter-spacing="0.10em">SHIPMENTS</text>
+            <text x="250" y="92"  fill="#F8FAFC" font-size="22" font-weight="700">312</text>
+            <text x="305" y="92"  fill="#10B981" font-size="9">↗+8%</text>
+            <text x="350" y="70"  fill="#64748B" font-size="8"  letter-spacing="0.10em">FLEET</text>
+            <text x="350" y="92"  fill="#F8FAFC" font-size="22" font-weight="700">42</text>
+            <text x="385" y="92"  fill="#22D3EE" font-size="9">↗+3%</text>
+            <text x="450" y="70"  fill="#64748B" font-size="8"  letter-spacing="0.10em">ALERTS</text>
+            <text x="450" y="92"  fill="#F8FAFC" font-size="22" font-weight="700">07</text>
+            <text x="485" y="92"  fill="#F43F5E" font-size="9">↓-2%</text>
+          </g>
+          <g stroke="#22D3EE" fill="none" stroke-width="1">
+            <polyline points="148,104 160,100 172,102 184,94 196,90 208,86 220,82"/>
+            <polyline points="248,100 260,96 272,94 284,90 296,86 308,82 322,78"/>
+            <polyline points="348,104 360,98 372,92 384,88 396,84 408,80 422,82"/>
+          </g>
+          <text x="140" y="148" fill="#94A3B8" font-family="Inter" font-size="9" letter-spacing="0.10em">RECENT SHIPMENTS</text>
+          <line x1="140" y1="155" x2="532" y2="155" stroke="rgba(148,163,184,0.10)"/>
+          <g font-family="Inter" font-size="9">
+            <text x="140" y="172" fill="#E2E8F0">TMS-1284</text>
+            <text x="220" y="172" fill="#94A3B8">Northwind → East</text>
+            <circle cx="350" cy="170" r="3" fill="#10B981"/><text x="360" y="172" fill="#10B981">Delivered</text>
+            <text x="430" y="172" fill="#64748B">14:02</text><text x="490" y="172" fill="#22D3EE">View →</text>
+            <line x1="140" y1="180" x2="532" y2="180" stroke="rgba(148,163,184,0.06)"/>
+            <text x="140" y="196" fill="#E2E8F0">TMS-1285</text>
+            <text x="220" y="196" fill="#94A3B8">Atlas → Downtown</text>
+            <circle cx="350" cy="194" r="3" fill="#F59E0B"/><text x="360" y="196" fill="#F59E0B">In Transit</text>
+            <text x="430" y="196" fill="#64748B">13:48</text><text x="490" y="196" fill="#22D3EE">View →</text>
+            <line x1="140" y1="204" x2="532" y2="204" stroke="rgba(148,163,184,0.06)"/>
+            <text x="140" y="220" fill="#E2E8F0">TMS-1286</text>
+            <text x="220" y="220" fill="#94A3B8">Sentinel → West</text>
+            <circle cx="350" cy="218" r="3" fill="#22D3EE"/><text x="360" y="220" fill="#22D3EE">Created</text>
+            <text x="430" y="220" fill="#64748B">13:21</text><text x="490" y="220" fill="#22D3EE">View →</text>
+          </g>
+          <rect x="140" y="252" width="392" height="92" rx="8" fill="rgba(2,6,23,0.6)" stroke="rgba(148,163,184,0.10)"/>
+          <text x="150" y="270" fill="#64748B" font-family="Inter" font-size="9" letter-spacing="0.10em">LIVE MAP</text>
+          <path d="M160 320 Q 240 280 360 312 T 520 296" fill="none" stroke="#22D3EE" stroke-opacity="0.7" stroke-width="1"/>
+          <circle cx="160" cy="320" r="4" fill="#22D3EE"/>
+          <circle cx="360" cy="312" r="4" fill="#22D3EE"/>
+          <circle cx="520" cy="296" r="4" fill="#F59E0B"/>
+          <rect x="180" y="332" width="312" height="4" rx="2" fill="#0B1120"/>
+          <rect x="180" y="332" width="200" height="4" rx="2" fill="#22D3EE"/>
+        </svg>
+      </div>
+      <div class="hm-deeper-reflection"></div>
+    </div>
+    <div class="hm-deeper-text">
+      <p class="hm-section-eyebrow hm-reveal">Customer booking command</p>
+      <h2 class="hm-section-title hm-reveal">Every shipment, instrumented.</h2>
+      <p class="hm-section-lede hm-reveal">Capture requests, monitor progress, and align each movement to an accountable, audit-grade workflow.</p>
+      <ul class="hm-deeper-list">
+        <li class="hm-reveal"><span class="hm-check"></span>
+          <div class="hm-deeper-row-body"><strong>Real-time tracking</strong>
+            <span>Live vehicle telemetry and shipment status across every service zone, polled every thirty seconds.</span>
+          </div>
+        </li>
+        <li class="hm-reveal"><span class="hm-check"></span>
+          <div class="hm-deeper-row-body"><strong>FIDO2 authentication</strong>
+            <span>Phishing-resistant passkeys for every user, with hardware-backed second factors and biometric fallback.</span>
+          </div>
+        </li>
+        <li class="hm-reveal"><span class="hm-check"></span>
+          <div class="hm-deeper-row-body"><strong>Automated dispatch</strong>
+            <span>Zone-aware assignment, ETA prediction, and a dispatcher-friendly keyboard-first UI on the operations board.</span>
+          </div>
+        </li>
+      </ul>
+      <a class="hm-btn hm-btn-secondary hm-reveal" href="dashboard.html" data-ss-magnetic>Open Operations Console</a>
+    </div>
+  </section>
+
+  <!-- Wave divider -->
+  <div class="hm-divider" aria-hidden="true">
+    <svg viewBox="0 0 1440 80" preserveAspectRatio="none">
+      <path d="M0 40 Q 360 70, 720 30 T 1440 50"/>
+    </svg>
+  </div>
+
+  <!-- Deep-dive B: list + map -->
+  <section class="hm-deeper">
+    <div class="hm-deeper-text">
+      <p class="hm-section-eyebrow hm-reveal">Vehicle visibility</p>
+      <h2 class="hm-section-title hm-reveal">Live movement.</h2>
+      <p class="hm-section-lede hm-reveal">Review each vehicle's condition, assignment, and location in a quiet, reliable, signal-rich interface.</p>
+      <ul class="hm-deeper-list">
+        <li class="hm-reveal"><span class="hm-check"></span>
+          <div class="hm-deeper-row-body"><strong>Per-vehicle health</strong>
+            <span>Telemetry, last-service stamp, and a confidence score available at a glance.</span>
+          </div>
+        </li>
+        <li class="hm-reveal"><span class="hm-check"></span>
+          <div class="hm-deeper-row-body"><strong>Service zone map</strong>
+            <span>North, South, East, West, Central, and Downtown — color-coded, with capacity overlays.</span>
+          </div>
+        </li>
+        <li class="hm-reveal"><span class="hm-check"></span>
+          <div class="hm-deeper-row-body"><strong>Audit-grade trail</strong>
+            <span>Every status change is logged with operator, timestamp, and reason — exportable to CSV.</span>
+          </div>
+        </li>
+      </ul>
+      <a class="hm-btn hm-btn-secondary hm-reveal" href="dashboard.html" data-ss-magnetic>Review Fleet Overview</a>
+    </div>
+    <div class="hm-deeper-visual">
+      <div class="hm-map">
+        <svg viewBox="0 0 540 360" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <pattern id="hmGrid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M20 0 L0 0 0 20" fill="none" stroke="#1E293B" stroke-width="0.6"/>
+            </pattern>
+          </defs>
+          <rect width="540" height="360" fill="url(#hmGrid)"/>
+          <path d="M40 60 L160 50 L220 130 L120 180 L60 150 Z" fill="rgba(34,211,238,0.04)" stroke="rgba(34,211,238,0.18)"/>
+          <path d="M200 220 L320 200 L380 280 L260 320 Z" fill="rgba(245,158,11,0.04)" stroke="rgba(245,158,11,0.18)"/>
+          <path d="M340 60 L460 80 L500 160 L380 170 Z" fill="rgba(16,185,129,0.04)" stroke="rgba(16,185,129,0.18)"/>
+          <g fill="none" stroke="#22D3EE" stroke-width="1.6" stroke-linecap="round">
+            <path d="M80 110 Q 160 90 220 130 T 360 160" stroke-dasharray="4 4"/>
+            <path d="M360 160 Q 400 220 440 260 T 500 280" stroke-dasharray="4 4"/>
+          </g>
+          <g>
+            <circle cx="80"  cy="110" r="8" fill="rgba(34,211,238,0.18)"/><circle cx="80"  cy="110" r="3.5" fill="#22D3EE"/>
+            <circle cx="180" cy="118" r="8" fill="rgba(34,211,238,0.18)"/><circle cx="180" cy="118" r="3.5" fill="#22D3EE"/>
+            <circle cx="300" cy="148" r="8" fill="rgba(245,158,11,0.20)"/><circle cx="300" cy="148" r="3.5" fill="#F59E0B"/>
+            <circle cx="430" cy="270" r="8" fill="rgba(34,211,238,0.18)"/><circle cx="430" cy="270" r="3.5" fill="#22D3EE"/>
+            <circle cx="500" cy="290" r="8" fill="rgba(34,211,238,0.18)"/><circle cx="500" cy="290" r="3.5" fill="#22D3EE"/>
+          </g>
+          <g font-family="JetBrains Mono" font-size="9" fill="#64748B" letter-spacing="0.10em">
+            <text x="50"  y="50">CENTRAL</text>
+            <text x="340" y="50">DOWNTOWN</text>
+            <text x="220" y="350">SOUTH</text>
+          </g>
+        </svg>
+      </div>
+      <div class="hm-deeper-reflection"></div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="hm-footer">
+    <div class="hm-footer-grid">
+      <div class="hm-footer-brand">
+        <a class="hm-brand" href="index.html">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <path d="M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z"/>
+            <path d="M9 12 L11 14 L15 10"/>
+          </svg>
+          <strong>SecureTMS</strong>
+        </a>
+        <p>A passwordless transport management system built on FIDO2 / WebAuthn for ground-truth logistics.</p>
+      </div>
+      <div class="hm-footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="dashboard.html">Dashboard</a></li>
+          <li><a href="login.html">Login</a></li>
+        </ul>
+      </div>
+      <div class="hm-footer-col">
+        <h4>Modules</h4>
+        <ul>
+          <li><a href="dashboard.html">Bookings</a></li>
+          <li><a href="dashboard.html">Fleet</a></li>
+          <li><a href="dashboard.html">Shipments</a></li>
+        </ul>
+      </div>
+      <div class="hm-footer-col">
+        <h4>Security</h4>
+        <ul>
+          <li><a href="https://fidoalliance.org" rel="noopener noreferrer" target="_blank">FIDO Alliance</a></li>
+          <li><a href="https://webauthn.io" rel="noopener noreferrer" target="_blank">WebAuthn guide</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="hm-footer-meta">
+      <span>SecureTMS v2.4.1 · Build 8921 · All systems nominal · Tracking fleet activity in real time</span>
+      <span class="tt-micro" style="display:block;margin-top:6px;color:var(--text-dim)">Secured by WebAuthn / FIDO2 · v2.4.1-stable</span>
+      <span style="display:block;margin-top:6px;color:var(--text-faint)">© 2026 — All positions reserved.</span>
+    </div>
+  </footer>
+
+  <!-- Back-to-top rocket -->
+  <button class="hm-rocket" type="button" aria-label="Back to top">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#22D3EE" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 3 c0 0 6 6 6 12 v3 h-3 l-1 4 h-4 l-1 -4 h-3 v-3 c0 -6 6 -12 6 -12z"/>
+      <circle cx="12" cy="10" r="2"/>
+      <path d="M9 18 l-3 4 M15 18 l3 4" stroke="#F59E0B"/>
+    </svg>
+  </button>
+
+  <!-- Easter egg -->
+  <div class="hm-eg" aria-label="Security disclosure">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10" stroke-width="1.4" stroke="currentColor"/>
+    </svg>
+    Secured by WebAuthn / FIDO2
+  </div>
+
+  <noscript><style>.hm-preloader{display:none!important}</style></noscript>
+  <script>
+    /* Safety net: remove preloader after 3s no matter what script state */
+    setTimeout(function(){
+      var p=document.querySelector('.hm-preloader');
+      if(p&&p.parentNode){p.parentNode.removeChild(p);}
+    },3000);
+  </script>
+  <script src="ambient.js" defer></script>
+  <script src="index-modern.js" defer></script>
 </body>
 </html>

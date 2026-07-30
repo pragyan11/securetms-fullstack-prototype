@@ -1,709 +1,593 @@
-let authToken = localStorage.getItem('secureTmsToken') || '';
+/* ═══════════════════════════════════════════════════════════════════════════
+   SecureTMS — shared client helpers.
+   Loaded by every page. Exposes window.requireAuth, window.api, window.authUser,
+   window.loginUser, window.logoutUser, SimpleWebAuthn wrappers and toast helper.
+   ═══════════════════════════════════════════════════════════════════════════ */
 
-function checkWebAuthnOrigin() {
-  const host = window.location.hostname;
-  if (host === '127.0.0.1' || host === '0.0.0.0') {
-    const msg = document.getElementById('loginMsg') || document.getElementById('regMsg');
-    if (msg) {
-      msg.style.display = 'block';
-      msg.textContent = 'WebAuthn requires a valid domain. Please open http://localhost:4000 instead of http://127.0.0.1:4000';
+(function () {
+  'use strict';
+
+  // ── LocalStorage token ──────────────────────────────────────────
+  let authToken = localStorage.getItem('secureTmsToken') || '';
+
+  function persistAuth(token) {
+    authToken = token;
+    if (token) localStorage.setItem('secureTmsToken', token);
+    else localStorage.removeItem('secureTmsToken');
+  }
+
+  // ── Auth user (set after verifyAuth runs) ──────────────────────────
+  let authUser = null;
+
+  // ── Role → landing page map ─────────────────────────────────────
+  // Admin is checked FIRST so admins cannot accidentally fall through to
+  // /customer.html because of a stale JWT, a partially seeded DB, or any
+  // caller passing the wrong field. The catch-all also lands admins safely.
+  function dashboardForRole(role) {
+    if (role === 'Admin')    return '/dashboard.html';
+    if (role === 'Customer') return '/customer.html';
+    if (role === 'Driver')   return '/driver.html';
+    return '/dashboard.html';
+  }
+
+  // ── fetch helper ──────────────────────────────────────────────────
+  async function api(path, method = 'GET', body = null, useAuth = false) {
+    const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+    if (useAuth && authToken) headers.Authorization = `Bearer ${authToken}`;
+    const options = { method, headers, credentials: 'include' };
+    if (body !== null) options.body = JSON.stringify(body);
+    try {
+      const res = await fetch(path, options);
+      const isJson = (res.headers.get('content-type') || '').includes('application/json');
+      const data = isJson ? await res.json() : await res.text();
+      if (!res.ok) {
+        const message = (isJson && data && (data.message || data.error)) ||
+                        (typeof data === 'string' && data) ||
+                        ('HTTP ' + res.status);
+        throw new Error(message);
+      }
+      return data;
+    } catch (err) {
+      return { error: true, status: err.status || 0, message: err.message || 'Request failed' };
+    }
+  }
+
+  // ── verifyAuth: refreshing token + role at every page load ────────
+  // Two strategies are tried, in order:
+  //   1. Bearer token from localStorage (app's preferred source).
+  //   2. httpOnly cookie (handles the case where the user logged in earlier
+  //      but localStorage was cleared, e.g. browser privacy mode restart).
+  // We never throw here — every failure mode collapses to a clean false so
+  // requireAuth redirects to /login.html.
+  //
+  // IMPORTANT: once *any* strategy returns a verified user, we DO NOT then
+  // let a stale localStorage token mutate that freshly-validated user. The
+  // JWT-payload fallback is restricted to cosmetic gaps (`name`, `email`)
+  // that the verify endpoint didn't return, and it can NEVER overwrite an
+  // already-known role. This avoids a real correctness regression where a
+  // leftover Customer JWT (from a previous session) could demote a freshly-
+  // logged-in Admin to "Customer".
+  async function verifyAuth() {
+    if (!authToken && !hasCookie('auth_token')) return false;
+
+    const tryCall = async (authHeaderValue) => {
+      const headers = { 'Accept': 'application/json' };
+      if (authHeaderValue) headers.Authorization = authHeaderValue;
+      try {
+        const r = await fetch('/api/auth/verify', {
+          method: 'GET',
+          headers,
+          credentials: 'include'
+        });
+        const isJson = (r.headers.get('content-type') || '').includes('application/json');
+        const data = isJson ? await r.json() : null;
+        return { ok: r.ok && data && data.valid && data.user, user: data && data.user, error: data && data.message };
+      } catch (e) {
+        return { ok: false, user: null, error: e.message || 'Network error' };
+      }
+    };
+
+    // First attempt: bearer from localStorage.
+    let r = (authToken) ? await tryCall('Bearer ' + authToken) : { ok: false, user: null };
+
+    // Second attempt: cookie only (no localStorage token).
+    if (!r.ok) {
+      const cookieOnly = await tryCall(null);
+      if (cookieOnly.ok) r = cookieOnly;
+    }
+
+    if (r.ok && r.user) {
+      // Start with the fresh server response; never let the cookie call
+      // be overwritten by an unrelated localStorage token.
+      const verified = Object.assign({ name: '', email: '', role: '' }, r.user);
+      authUser = Object.assign({}, verified); // spreads every server-returned field; future fields stay intact
+
+      // Cosmetic fallback for displayable fields that the verify response
+      // omitted (rare; only when the schema is changed mid-flight). Role
+      // is intentionally NOT touched here, so a stale localStorage JWT
+      // from a previous session can NEVER demote a freshly-verified user.
+      if ((!authUser.name || !authUser.email) && authToken) {
+        const payload = decodeJwt(authToken);
+        if (payload) {
+          if (!authUser.name)  authUser.name  = payload.name  || '';
+          if (!authUser.email) authUser.email = payload.email || '';
+        }
+      }
+      return true;
+    }
+
+    // Token invalid → wipe the local copy so we don't loop on next page load.
+    if (r.error && /token|unauthor|invalid/i.test(r.error || '')) {
+      persistAuth('');
     }
     return false;
   }
-  return true;
-}
 
-// Ensure SimpleWebAuthnBrowser library is loaded. If the global is missing, dynamically load it.
-async function ensureSimpleWebAuthnBrowser() {
-  if (typeof SimpleWebAuthnBrowser !== 'undefined') {
-    return;
+  function decodeJwt(t) {
+    try {
+      const [, payload] = t.split('.');
+      if (!payload) return null;
+      return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    } catch (_e) { return null; }
   }
-  return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = '/libs/simplewebauthn-browser.umd.min.js';
-    script.onload = () => {
-      // The local build exposes the same global as the UMD bundle
-      if (typeof SimpleWebAuthnBrowser === 'undefined') {
-        reject(new Error('SimpleWebAuthnBrowser failed to initialize after script load'));
-      } else {
-        resolve();
-      }
-    };
-    script.onerror = () => reject(new Error('Failed to load SimpleWebAuthnBrowser script'));
-    document.head.appendChild(script);
-  });
-}
 
-function persistAuth(token) {
-  authToken = token;
-  if (token) {
-    localStorage.setItem('secureTmsToken', token);
-  } else {
-    localStorage.removeItem('secureTmsToken');
+  function hasCookie(name) {
+    return document.cookie.split(';').some(c => c.trim().startsWith(name + '='));
   }
-}
 
-// Show/hide spinner during async operations
-function withSpinner(promise) {
-  showSpinner();
-  return promise.finally(hideSpinner);
-}
-
-/**
- * Register a Passkey (WebAuthn) for the currently entered email.
- * Uses the server endpoints `/webauthn/register/options` and `/webauthn/register`.
- */
-async function registerPasskey() {
-  if (!checkWebAuthnOrigin()) {
-    alert('WebAuthn is not supported on this address. Please use http://localhost:4000');
-    return;
-  }
-  const email = document.getElementById('regEmail')?.value.trim();
-  if (!email) {
-    alert('Please enter an email before registering a Passkey.');
-    return;
-  }
-  // 1️⃣ Get registration options from the server
-  const optionsRes = await withSpinner(api('/api/auth/webauthn/register/options', 'POST', { email }, false));
-  if (optionsRes.error) {
-    alert('Failed to get registration options: ' + optionsRes.message);
-    return;
-  }
-  // 2️⃣ Call the browser's WebAuthn API (requires @simplewebauthn/browser loaded on the page)
-  let attResp;
-  try {
-    // Ensure the SimpleWebAuthnBrowser library is loaded before registration
-    await ensureSimpleWebAuthnBrowser();
-    // @simplewebauthn/browser provides startRegistration
-    attResp = await SimpleWebAuthnBrowser.startRegistration(optionsRes);
-  } catch (e) {
-    alert('Passkey registration failed: ' + e.message);
-    return;
-  }
-  // 3️⃣ Send attestation response back to server for verification
-  const verifyRes = await withSpinner(api('/api/auth/webauthn/register', 'POST', { email, attestationResponse: attResp }, false));
-  if (verifyRes.error || !verifyRes.verified) {
-    alert('Server verification failed: ' + (verifyRes.message || 'unknown'));
-    return;
-  }
-  alert('Passkey registered successfully!');
-}
-
-/**
- * Login using a Passkey (WebAuthn).
- * Uses `/webauthn/login/options` and `/webauthn/login` endpoints.
- */
-async function loginPasskey() {
-  if (!checkWebAuthnOrigin()) {
-    alert('WebAuthn is not supported on this address. Please use http://localhost:4000');
-    return;
-  }
-  const email = document.getElementById('loginEmail')?.value.trim();
-  if (!email) {
-    alert('Please enter your email before logging in with a Passkey.');
-    return;
-  }
-  // 1️⃣ Get authentication options
-  const optsRes = await withSpinner(api('/api/auth/webauthn/login/options', 'POST', { email }, false));
-  if (optsRes.error) {
-    alert('Failed to get login options: ' + optsRes.message);
-    return;
-  }
-  // 2️⃣ Call browser API to get assertion
-  let assertion;
-  try {
-    // Ensure the SimpleWebAuthnBrowser library is available before invoking it
-    await ensureSimpleWebAuthnBrowser();
-    assertion = await SimpleWebAuthnBrowser.startAuthentication(optsRes);
-  } catch (e) {
-    alert('Passkey authentication failed: ' + e.message);
-    return;
-  }
-  // 3️⃣ Verify with server
-  const verify = await withSpinner(api('/api/auth/webauthn/login', 'POST', { email, assertionResponse: assertion }, false));
-  if (verify.error || !verify.verified) {
-    alert('Login verification failed: ' + (verify.message || 'unknown'));
-    return;
-  }
-  // Store JWT and redirect
-  persistAuth(verify.token);
-  redirectToDashboard();
-}
-
-function redirectToDashboard() {
-  window.location.href = '/dashboard.html';
-}
-
-// Attach logout handler (if element exists on the page)
-const logoutBtn = document.getElementById('logoutBtn');
-if (logoutBtn) {
-  logoutBtn.addEventListener('click', async () => {
-    const res = await api('/api/auth/logout', 'POST', null, true);
-    if (!res.error) {
-      persistAuth('');
-      // After logout, return to login page
+  /** Gate a page by role. Redirect on failure. Returns the user object. */
+  async function requireAuth(role) {
+    const ok = await verifyAuth();
+    if (!ok || !authUser) {
       window.location.href = '/login.html';
-    } else {
-      alert('Logout failed: ' + res.message);
+      return null;
     }
-  });
-}
-
-function redirectToHome() {
-  window.location.href = '/index.html';
-}
-
-async function api(path, method = 'GET', body = null, useAuth = false) {
-  const headers = { 'Content-Type': 'application/json' };
-
-  if (useAuth && authToken) {
-    headers.Authorization = `Bearer ${authToken}`;
-  }
-
-  const options = {
-    method,
-    headers,
-    credentials: 'include'
-  };
-
-  if (body !== null) {
-    options.body = JSON.stringify(body);
-  }
-
-  try {
-    const res = await fetch(path, options);
-    const contentType = res.headers.get('content-type') || '';
-    const isJson = contentType.includes('application/json');
-    const data = isJson ? await res.json() : await res.text();
-
-    if (!res.ok) {
-      throw new Error(typeof data === 'string' ? data : data.message || 'Request failed');
+    if (role && authUser.role && authUser.role !== role) {
+      window.location.href = dashboardForRole(authUser.role);
+      return null;
     }
-
-    return data;
-  } catch (error) {
-    return { error: true, message: error.message || 'Request failed' };
+    // Soft-touch: ping the backend so demo accounts are seed-deduped and a
+    // /api/auth/me call always runs after verifyAuth. Wrapped in try/catch so
+    // a transient network failure here never breaks the page load.
+    try { await api('/api/auth/me', 'GET', null, true); } catch (_e) { /* ignore */ }
+    return authUser;
   }
-}
 
-// Verify the stored auth token with the backend and store user info
-let authUser = null;
-async function verifyAuth() {
-  if (!authToken) return false;
-  const res = await api('/api/auth/verify', 'GET', null, true);
-  if (!res.error && res.valid) {
-    authUser = res.user; // store decoded user payload for UI decisions
+  // ── Logout ─────────────────────────────────────────────────────────
+  async function logoutUser() {
+    persistAuth('');
+    try { await api('/api/auth/logout', 'POST', null, false); } catch (e) { /* ignore */ }
+    window.location.href = '/login.html';
+  }
+
+  // ── WebAuthn origin support guard ──────────────────────────────────
+  function checkWebAuthnOrigin() {
+    const host = window.location.hostname;
+    if (host === '127.0.0.1' || host === '0.0.0.0') {
+      const m = document.getElementById('loginMsg') || document.getElementById('regMsg');
+      if (m) { m.style.display = 'block'; m.textContent = 'WebAuthn requires a valid domain. Please open http://localhost:4000 instead of http://127.0.0.1:4000'; }
+      return false;
+    }
     return true;
   }
-  return false;
-}
 
-function showRaw(obj, outputId = 'logsOutput') {
-  const output = document.getElementById(outputId);
-  if (!output) return;
-  output.textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
-}
-
-function activateTab(tabId) {
-  const tabs = document.querySelectorAll('.tab-content');
-  const buttons = document.querySelectorAll('.inner-tab');
-
-  tabs.forEach((tab) => tab.classList.add('hidden'));
-  buttons.forEach((button) => button.classList.remove('active'));
-
-  const activeTab = document.getElementById(tabId);
-  if (activeTab) {
-    activeTab.classList.remove('hidden');
-  }
-
-  buttons.forEach((button) => {
-    if (button.dataset.tab === tabId) {
-      button.classList.add('active');
-    }
-  });
-}
-
-async function registerUser() {
-  // Grab the message element first so we can safely use it throughout the function.
-  const msg = document.getElementById('regMsg');
-
-  const data = {
-    name: document.getElementById('regName')?.value.trim() || '',
-    email: document.getElementById('regEmail')?.value.trim() || '',
-    role: document.getElementById('regRole')?.value || 'Customer',
-    authMethod: document.getElementById('regMethod')?.value || 'Passkey',
-    recoveryEmail: document.getElementById('regRecovery')?.value.trim() || ''
-  };
-
-  if (msg) msg.textContent = 'Creating your account...';
-
-  const res = await api('/api/auth/register', 'POST', data);
-  if (res.error) {
-    if (msg) msg.textContent = res.message || 'Registration failed.';
-    return;
-  }
-
-  if (msg) msg.textContent = 'Account created. Registering your passkey...';
-
-  try {
-    await registerPasskey();
-    if (msg) msg.textContent = 'Account created and passkey registered successfully!';
-  } catch (e) {
-    if (msg) msg.textContent = 'Account created, but passkey registration failed: ' + (e.message || e);
-  }
-}
-
-async function loginUser() {
-  const email = document.getElementById('loginEmail')?.value.trim() || '';
-  const msg = document.getElementById('loginMsg');
-
-  if (!email) {
-    if (msg) msg.textContent = 'Please enter your email.';
-    return;
-  }
-
-  if (msg) msg.textContent = 'Starting passkey authentication...';
-
-  try {
-    await loginPasskey();
-  } catch (e) {
-    if (msg) msg.textContent = 'Passkey authentication failed: ' + (e.message || 'unknown');
-  }
-}
-
-async function recoverAccount() {
-  const email = document.getElementById('loginEmail')?.value.trim() || '';
-  const recoveryEmail = prompt('Enter recovery email');
-  const msg = document.getElementById('loginMsg');
-
-  if (!email || !recoveryEmail) {
-    if (msg) msg.textContent = 'Recovery cancelled.';
-    return;
-  }
-
-  const res = await api('/api/auth/recover', 'POST', { email, recoveryEmail });
-  if (msg) msg.textContent = res.message || 'Recovery request processed.';
-}
-
-async function logoutUser() {
-  persistAuth('');
-  await api('/api/auth/logout', 'POST', {}, false);
-  redirectToHome();
-}
-
-function renderBookings(bookingsArray) {
-  const output = document.getElementById('bookingsOutput');
-  if (!output) return;
-  output.innerHTML = '';
-
-  if (!Array.isArray(bookingsArray) || bookingsArray.length === 0) {
-    output.innerHTML = '<div class="empty-state">📭 No bookings yet. Create one to get started!</div>';
-    return;
-  }
-
-  const wrapper = document.createElement('div');
-  wrapper.className = 'cards-grid';
-
-  bookingsArray.forEach((booking, idx) => {
-    const statusIcon = booking.status === 'Pending' ? '⏳' : booking.status === 'Completed' ? '✅' : '📦';
-    const statusColor = booking.status === 'Pending' ? '#ff9f43' : booking.status === 'Completed' ? '#22c55e' : '#94a3b8';
-    const shortId = (booking._id || '').substring(0, 8).toUpperCase();
-    const createdDate = booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : 'N/A';
-
-    const card = document.createElement('div');
-    card.className = 'data-card';
-    card.innerHTML = `
-      <div class="card-header">
-        <div class="card-title">${statusIcon} ${booking.customerName || 'Customer'}</div>
-        <div class="card-id">ID: ${shortId}</div>
-      </div>
-      <div class="card-body">
-        <div class="card-row">
-          <span class="card-label">📍 From</span>
-          <span class="card-value">${booking.origin || 'Not specified'}</span>
-        </div>
-        <div class="card-row">
-          <span class="card-label">🎯 To</span>
-          <span class="card-value">${booking.destination || 'Not specified'}</span>
-        </div>
-        <div class="card-row">
-          <span class="card-label">📅 Created</span>
-          <span class="card-value">${createdDate}</span>
-        </div>
-        <div class="card-row">
-          <span class="card-label">Status</span>
-          <span class="card-status" style="background-color: ${statusColor}22; color: ${statusColor}; border-color: ${statusColor}44">${booking.status}</span>
-        </div>
-      </div>
-    `;
-    wrapper.appendChild(card);
-  });
-
-  output.appendChild(wrapper);
-}
-
-function renderShipments(shipmentsArray) {
-  const output = document.getElementById('shipmentsOutput');
-  if (!output) return;
-  output.innerHTML = '';
-
-  if (!Array.isArray(shipmentsArray) || shipmentsArray.length === 0) {
-    output.innerHTML = '<div class="empty-state">📦 No shipments yet. Add one to track!</div>';
-    return;
-  }
-
-  const wrapper = document.createElement('div');
-  wrapper.className = 'cards-grid';
-
-  shipmentsArray.forEach((shipment) => {
-    const statusIcons = {
-      'Created': '📋',
-      'In Transit': '🚚',
-      'Delivered': '✅',
-      'default': '📦'
-    };
-    const statusIcon = statusIcons[shipment.status] || statusIcons['default'];
-    const statusColor = shipment.status === 'In Transit' ? '#ff9f43' : shipment.status === 'Delivered' ? '#22c55e' : '#94a3b8';
-    const shortId = (shipment._id || '').substring(0, 8).toUpperCase();
-    const updatedDate = shipment.updatedAt ? new Date(shipment.updatedAt).toLocaleTimeString() : 'N/A';
-
-    const card = document.createElement('div');
-    card.className = 'data-card';
-    card.innerHTML = `
-      <div class="card-header">
-        <div class="card-title">${statusIcon} ${shipment.vehicleNumber || 'Shipment'}</div>
-        <div class="card-id">ID: ${shortId}</div>
-      </div>
-      <div class="card-body">
-        <div class="card-row">
-          <span class="card-label">🚙 Vehicle</span>
-          <span class="card-value">${shipment.vehicleNumber || 'N/A'}</span>
-        </div>
-        <div class="card-row">
-          <span class="card-label">👤 Driver</span>
-          <span class="card-value">${shipment.driverName || 'N/A'}</span>
-        </div>
-        <div class="card-row">
-          <span class="card-label">📍 Location</span>
-          <span class="card-value">${shipment.location || 'Not updated'}</span>
-        </div>
-        <div class="card-row">
-          <span class="card-label">Status</span>
-          <span class="card-status" style="background-color: ${statusColor}22; color: ${statusColor}; border-color: ${statusColor}44">${shipment.status}</span>
-        </div>
-        <div class="card-row">
-          <span class="card-label">⏰ Updated</span>
-          <span class="card-value">${updatedDate}</span>
-        </div>
-      </div>
-    `;
-    wrapper.appendChild(card);
-  });
-
-  output.appendChild(wrapper);
-}
-
-function renderFleet(fleetArray) {
-  const output = document.getElementById('fleetOutput');
-  if (!output) return;
-  output.innerHTML = '';
-
-  if (!Array.isArray(fleetArray) || fleetArray.length === 0) {
-    output.textContent = 'No fleet data available.';
-    return;
-  }
-
-  const wrapper = document.createElement('div');
-  const summary = document.createElement('div');
-  summary.className = 'dashboard-summary';
-
-  const total = fleetArray.length;
-  const inTransit = fleetArray.filter((vehicle) => vehicle.status === 'In Transit').length;
-  const maintenance = fleetArray.filter((vehicle) => vehicle.status === 'Maintenance').length;
-  const available = fleetArray.filter((vehicle) => vehicle.status === 'Available').length;
-
-  [
-    { label: 'Total vehicles', value: total },
-    { label: 'In transit', value: inTransit },
-    { label: 'Available', value: available },
-    { label: 'In maintenance', value: maintenance }
-  ].forEach((item) => {
-    const card = document.createElement('div');
-    card.className = 'kpi-card';
-    card.innerHTML = `
-      <span class="kpi-label">${item.label}</span>
-      <span class="kpi-value">${item.value}</span>
-    `;
-    summary.appendChild(card);
-  });
-
-  wrapper.appendChild(summary);
-
-  const grid = document.createElement('div');
-  grid.className = 'fleet-grid';
-
-  fleetArray.forEach((vehicle) => {
-    const card = document.createElement('div');
-    const statusClass = `status-${String(vehicle.status || '')
-      .replace(/\s+/g, '-')
-      .toLowerCase()}`;
-    card.className = `fleet-card ${statusClass}`;
-
-    card.innerHTML = `
-      <div class="fleet-card-header">
-        <div class="fleet-title">${vehicle.vehicleNumber || 'Vehicle'}</div>
-        <div class="fleet-type">${vehicle.vehicleType || ''}</div>
-      </div>
-      <div class="fleet-card-body">
-        <p><span class="label">Driver</span><span class="value">${vehicle.driverName || 'N/A'}</span></p>
-        <p><span class="label">Status</span><span class="value">${vehicle.status || 'Unknown'}</span></p>
-        <p><span class="label">Location</span><span class="value">${vehicle.location || 'N/A'}</span></p>
-        <p><span class="label">Updated</span><span class="value">${vehicle.updatedAt ? new Date(vehicle.updatedAt).toLocaleString() : 'N/A'}</span></p>
-      </div>
-    `;
-
-    grid.appendChild(card);
-  });
-
-  wrapper.appendChild(grid);
-  output.appendChild(wrapper);
-}
-
-function renderAdminStats(stats) {
-  const output = document.getElementById('adminOutput');
-  if (!output) return;
-  output.innerHTML = '';
-
-  if (!stats || typeof stats !== 'object') {
-    output.textContent = 'No admin stats available.';
-    return;
-  }
-
-  const summary = document.createElement('div');
-  summary.className = 'dashboard-summary';
-
-  [
-    { label: 'Users', value: stats.users },
-    { label: 'Bookings', value: stats.bookings },
-    { label: 'Shipments', value: stats.shipments },
-    { label: 'Vehicles', value: stats.vehicles }
-  ].forEach((item) => {
-    const card = document.createElement('div');
-    card.className = 'kpi-card';
-    card.innerHTML = `
-      <span class="kpi-label">${item.label}</span>
-      <span class="kpi-value">${item.value ?? 0}</span>
-    `;
-    summary.appendChild(card);
-  });
-
-  output.appendChild(summary);
-}
-
-async function addBooking() {
-  const customerName = prompt('Customer name:');
-  const origin = prompt('Origin:');
-  const destination = prompt('Destination:');
-
-  if (!customerName || !origin || !destination) {
-    alert('Booking creation cancelled.');
-    return;
-  }
-
-  const body = { customerName, origin, destination, status: 'Pending' };
-  const res = await api('/api/bookings', 'POST', body, true);
-  alert(res.message || 'Booking created.');
-  await loadBookings();
-}
-
-async function addShipment() {
-  const vehicleNumber = prompt('Vehicle number:');
-  const driverName = prompt('Driver name:');
-  const location = prompt('Location:');
-
-  if (!vehicleNumber || !driverName) {
-    alert('Shipment creation cancelled.');
-    return;
-  }
-
-  const body = { vehicleNumber, driverName, location, status: 'Created' };
-  const res = await api('/api/shipments', 'POST', body, true);
-  alert(res.message || 'Shipment created.');
-  await loadShipments();
-}
-
-async function addVehicle() {
-  const vehicleNumber = prompt('Vehicle number:');
-  const vehicleType = prompt('Vehicle type (Truck, Van, etc.):');
-  const driverName = prompt('Driver name:');
-  const location = prompt('Location:');
-
-  if (!vehicleNumber || !vehicleType) {
-    alert('Vehicle creation cancelled.');
-    return;
-  }
-
-  const body = {
-    vehicleNumber,
-    vehicleType,
-    driverName,
-    location,
-    status: 'Available'
-  };
-
-  const res = await api('/api/fleet', 'POST', body, true);
-  alert(res.message || 'Vehicle created.');
-  await loadFleet();
-}
-
-async function loadBookings() {
-  activateTab('bookingsTab');
-  const bookings = await api('/api/bookings', 'GET', null, true);
-  renderBookings(Array.isArray(bookings) ? bookings : bookings.data || []);
-}
-
-async function loadShipments() {
-  activateTab('shipmentsTab');
-  const shipments = await api('/api/shipments', 'GET', null, true);
-  renderShipments(Array.isArray(shipments) ? shipments : shipments.data || []);
-}
-
-async function loadFleet() {
-  activateTab('fleetTab');
-  const fleet = await api('/api/fleet', 'GET', null, true);
-  renderFleet(Array.isArray(fleet) ? fleet : fleet.data || []);
-}
-
-async function loadLogs() {
-  activateTab('logsTab');
-  const logs = await api('/api/logs', 'GET', null, true);
-  renderLogs(logs);
-}
-
-function renderLogs(logsArray) {
-  const output = document.getElementById('logsOutput');
-  if (!output) return;
-  output.innerHTML = '';
-
-  if (!Array.isArray(logsArray) || logsArray.length === 0) {
-    output.innerHTML = '<div class="empty-state">📋 No audit logs available.</div>';
-    return;
-  }
-
-  const wrapper = document.createElement('div');
-  wrapper.className = 'logs-list';
-
-  logsArray.forEach((log) => {
-    const actionIcons = {
-      'REGISTER': '📝',
-      'LOGIN': '🔐',
-      'LOGOUT': '🚪',
-      'BOOKING_CREATE': '📦',
-      'BOOKING_UPDATE': '✏️',
-      'BOOKING_DELETE': '🗑️',
-      'VEHICLE_CREATE': '🚙',
-      'VEHICLE_UPDATE': '🔧',
-      'VEHICLE_DELETE': '🗑️',
-      'SHIPMENT_CREATE': '📮',
-      'SHIPMENT_UPDATE': '🚚',
-      'default': '📌'
-    };
-    const icon = actionIcons[log.action] || actionIcons['default'];
-    const time = log.createdAt ? new Date(log.createdAt).toLocaleString() : 'N/A';
-
-    const logEntry = document.createElement('div');
-    logEntry.className = 'log-entry';
-    logEntry.innerHTML = `
-      <div class="log-icon">${icon}</div>
-      <div class="log-content">
-        <div class="log-action">${log.action.replace(/_/g, ' ')}</div>
-        <div class="log-user">User: ${log.userEmail || 'anonymous'}</div>
-        <div class="log-details">${log.details || 'No details'}</div>
-        <div class="log-meta">
-          <span>⏰ ${time}</span>
-          <span>📍 ${log.ipAddress || 'Unknown IP'}</span>
-        </div>
-      </div>
-    `;
-    wrapper.appendChild(logEntry);
-  });
-
-  output.appendChild(wrapper);
-}
-
-async function loadAdminStats() {
-  activateTab('adminTab');
-  const stats = await api('/api/admin/dashboard', 'GET', null, true);
-  renderAdminStats(stats);
-}
-
-document.addEventListener('DOMContentLoaded', async () => {
-  if (!checkWebAuthnOrigin()) {
-    return;
-  }
-
-  if (window.location.pathname.includes('/dashboard.html') && !authToken) {
-    window.location.href = '/login.html';
-    return;
-  }
-
-  if (window.location.pathname.includes('/login.html') && authToken) {
-    redirectToDashboard();
-    return;
-  }
-
-  // Verify token and populate authUser (used for role‑based UI decisions)
-  await verifyAuth();
-
-  // Hide admin tab for non‑admin users to avoid unnecessary 403 requests
-  if (!authUser || authUser.role !== 'Admin') {
-    const adminTabBtn = document.querySelector('button[data-tab="adminTab"]');
-    if (adminTabBtn) adminTabBtn.style.display = 'none';
-  }
-
-  document.getElementById('registerBtn')?.addEventListener('click', registerUser);
-  document.getElementById('registerPasskeyBtn')?.addEventListener('click', registerPasskey);
-  document.getElementById('loginBtn')?.addEventListener('click', loginUser);
-  document.getElementById('recoverBtn')?.addEventListener('click', recoverAccount);
-  // Prepare camera button – requests webcam permission ahead of time and sets a flag
-  // Manual camera preparation button removed; permission will be requested automatically when needed.
-  document.getElementById('logoutBtn')?.addEventListener('click', logoutUser);
-
-  document.querySelectorAll('.inner-tab').forEach((button) => {
-    button.addEventListener('click', () => {
-      activateTab(button.dataset.tab);
+  async function ensureSimpleWebAuthnBrowser() {
+    if (typeof SimpleWebAuthnBrowser !== 'undefined') return;
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = '/libs/simplewebauthn-browser.umd.min.js';
+      s.onload = () => (typeof SimpleWebAuthnBrowser === 'undefined' ? reject(new Error('SimpleWebAuthnBrowser failed to initialise')) : resolve());
+      s.onerror = () => reject(new Error('Failed to load SimpleWebAuthnBrowser'));
+      document.head.appendChild(s);
     });
-  });
-
-  document.getElementById('refreshBookingsBtn')?.addEventListener('click', loadBookings);
-  document.getElementById('refreshShipmentsBtn')?.addEventListener('click', loadShipments);
-  document.getElementById('refreshFleetBtn')?.addEventListener('click', loadFleet);
-  document.getElementById('refreshLogsBtn')?.addEventListener('click', loadLogs);
-  document.getElementById('refreshAdminBtn')?.addEventListener('click', loadAdminStats);
-
-  document.getElementById('addBookingBtn')?.addEventListener('click', addBooking);
-  document.getElementById('addShipmentBtn')?.addEventListener('click', addShipment);
-  document.getElementById('addVehicleBtn')?.addEventListener('click', addVehicle);
-
-  if (document.getElementById('bookingsOutput')) {
-    loadBookings();
   }
-  if (document.getElementById('shipmentsOutput')) {
-    loadShipments();
+
+  /** Registers the new account's passkey and returns the server's verified payload. */
+  async function registerPasskey() {
+    if (!checkWebAuthnOrigin()) throw new Error('WebAuthn origin unsupported on this address');
+    const email = (document.getElementById('regEmail')?.value || document.getElementById('admEmail')?.value || '').trim();
+    if (!email) throw new Error('Enter an email first');
+    const optsRes = await api('/api/auth/webauthn/register/options', 'POST', { email }, false);
+    if (optsRes.error) throw new Error(optsRes.message || 'Failed to get registration options');
+    await ensureSimpleWebAuthnBrowser();
+    let att;
+    try { att = await SimpleWebAuthnBrowser.startRegistration(optsRes); }
+    catch (e) { throw new Error('Passkey registration failed: ' + e.message); }
+    const verify = await api('/api/auth/webauthn/register', 'POST', { email, attestationResponse: att }, false);
+    if (verify.error || !verify.verified) throw new Error(verify.message || 'Server verification failed');
+    if (verify.token) persistAuth(verify.token);
+    if (verify.user) authUser = verify.user;
+    return verify;
   }
-  if (document.getElementById('fleetOutput')) {
-    loadFleet();
+
+  async function loginPasskey() {
+    if (!checkWebAuthnOrigin()) throw new Error('WebAuthn origin unsupported on this address');
+    const email = document.getElementById('loginEmail')?.value.trim();
+    if (!email) throw new Error('Enter your email first');
+    const optsRes = await api('/api/auth/webauthn/login/options', 'POST', { email }, false);
+    if (optsRes.error) throw new Error(optsRes.message || 'Failed to get login options');
+    await ensureSimpleWebAuthnBrowser();
+    let assertion;
+    try { assertion = await SimpleWebAuthnBrowser.startAuthentication(optsRes); }
+    catch (e) { throw new Error('Passkey authentication failed: ' + e.message); }
+    const verify = await api('/api/auth/webauthn/login', 'POST', { email, assertionResponse: assertion }, false);
+    if (verify.error || !verify.verified) throw new Error(verify.message || 'Login verification failed');
+    persistAuth(verify.token);
+    authUser = verify.user || null;
+    return verify;
   }
-  // Load logs only for admin users (logs endpoint is admin‑only)
-  if (document.getElementById('logsOutput')) {
-    if (authUser && authUser.role === 'Admin') {
-      loadLogs();
-    } else {
-      document.getElementById('logsOutput').textContent = 'Logs are available to admin users only.';
+
+  /**
+   * Single source of truth for "after a successful login, where do I go?".
+   * Falls back from server-supplied redirect → authUser.role → v.user.role.
+   *
+   * Hard guarantee built in: if the fresh server response says the user
+   * is an Admin, they ALWAYS land on /dashboard.html — even if a stale
+   * JWT or a partially populated user object tried to send them to
+   * /customer.html. This is the single hardening that makes the
+   * "Admin login must go to dashboard, never to customer page" requirement
+   * unmissable.
+   */
+  function resolveRedirect(v) {
+    // Strongest signal: the server response tells us directly.
+    if (v && v.user && v.user.role === 'Admin') return '/dashboard.html';
+
+    const fallback = (v && v.redirect) ||
+      dashboardForRole((authUser && authUser.role) || (v && v.user && v.user.role));
+    // Belt-and-braces: also honour a stale authUser.role of 'Admin'.
+    if (authUser && authUser.role === 'Admin' && fallback === '/customer.html') {
+      return '/dashboard.html';
+    }
+    return fallback;
+  }
+
+  function redirectToDashboard() { window.location.href = resolveRedirect(authUser); }
+
+  // ── Legacy register/login wrappers used by register & login pages ─
+  async function registerUser() {
+    const msg = document.getElementById('regMsg');
+    const role = document.getElementById('regRole')?.value || 'Customer';
+    const data = {
+      name: document.getElementById('regName')?.value.trim() || '',
+      email: document.getElementById('regEmail')?.value.trim() || '',
+      role,
+      recoveryEmail: document.getElementById('regRecovery')?.value.trim() || ''
+    };
+    if (role === 'Admin') {
+      data.inviteToken = document.getElementById('regInviteToken')?.value.trim() || '';
+    }
+    if (role === 'Admin' && !data.inviteToken) {
+      if (msg) { msg.style.color = 'var(--red-600, #DC2626)'; msg.textContent = 'An invitation token is required for admin registration.'; }
+      return;
+    }
+    if (!data.name || !data.email || !data.recoveryEmail) {
+      if (msg) {
+        msg.textContent = 'Please fill in all fields.';
+        msg.style.color = 'var(--red-600, #DC2626)';
+      }
+      return;
+    }
+    if (msg) { msg.style.color = 'var(--text-muted)'; msg.textContent = 'Creating your account…'; }
+    const reg = await api('/api/auth/register', 'POST', data, false);
+    if (reg.error) {
+      if (msg) { msg.style.color = 'var(--red-600, #DC2626)'; msg.textContent = reg.message || 'Registration failed.'; }
+      return;
+    }
+    if (msg) { msg.style.color = 'var(--text-muted)'; msg.textContent = 'Account created. Enrolling your passkey…'; }
+    try {
+      const v = await registerPasskey();
+      if (msg) { msg.style.color = 'var(--green-700, #047857)'; msg.textContent = 'Account created and passkey registered — redirecting…'; }
+      setTimeout(() => { window.location.href = resolveRedirect(v); }, 600);
+    } catch (e) {
+      if (msg) { msg.style.color = 'var(--amber-700, #B45309)'; msg.textContent = 'Account created, but passkey registration failed: ' + (e.message || e) + '. Please try signing in.'; }
     }
   }
-  // Load admin stats only for admin users to avoid 403 errors for others
-  if (document.getElementById('adminOutput') && authUser && authUser.role === 'Admin') {
-    loadAdminStats();
+
+  async function loginUser() {
+    const email = document.getElementById('loginEmail')?.value.trim() || '';
+    const msg = document.getElementById('loginMsg');
+    if (!email) { if (msg) msg.textContent = 'Please enter your email.'; return; }
+    if (msg) msg.textContent = 'Authenticating with your passkey…';
+    try {
+      const v = await loginPasskey();
+      window.location.href = resolveRedirect(v);
+    } catch (e) {
+      if (msg) { msg.textContent = e.message || 'Authentication failed.'; msg.style.color = 'var(--red-600, #DC2626)'; }
+    }
   }
-});
+
+  async function recoverAccount() {
+    const email = document.getElementById('loginEmail')?.value.trim() || '';
+    const recoveryEmail = prompt('Enter recovery email');
+    const msg = document.getElementById('loginMsg');
+    if (!email || !recoveryEmail) { if (msg) msg.textContent = 'Recovery cancelled.'; return; }
+    const res = await api('/api/auth/recover', 'POST', { email, recoveryEmail }, false);
+    if (msg) msg.textContent = res.message || 'Recovery request processed.';
+  }
+
+  // ── Wire common UI elements ───────────────────────────────────────
+  /* Run the given init function now if the DOM is already parsed, or on
+     next DOMContentLoaded otherwise. Also re-run when the page is restored
+     from bfcache (back/forward navigation, especially on Chrome/Safari) so
+     our auth check, data refresh and event wiring are not skipped on the
+     restored blob. Without this, a user can sit on a frozen skeleton page
+     after using the Back button. */
+  function onReady(fn) {
+    if (typeof document === 'undefined') return;
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', fn, { once: true });
+    } else {
+      try { fn(); } catch (_e) { /* keep going */ }
+    }
+    window.addEventListener('pageshow', (e) => {
+      if (e && e.persisted) {
+        try { fn(); } catch (_e) { /* keep going */ }
+      }
+    });
+  }
+  window.onReady = onReady;
+
+  function wireGlobalButtons() {
+    document.getElementById('logoutBtn')?.addEventListener('click', logoutUser);
+    document.getElementById('registerBtn')?.addEventListener('click', registerUser);
+    document.getElementById('loginBtn')?.addEventListener('click', loginUser);
+    document.getElementById('recoverBtn')?.addEventListener('click', recoverAccount);
+  }
+  onReady(wireGlobalButtons);
+
+  // ── Login page: reveal the auth shell (or auto-forward logged-in users) ─
+  // Previously this only forwarded verified Admins; it now forwards ANY
+  // signed-in user to their canonical dashboard so a Customer or Driver
+  // revisiting /login.html doesn't briefly see the passkey form. The
+  // shell ships with visibility:hidden in the markup so the form never
+  // flashes before the redirect fires.
+  //
+  // History: this logic used to live as an inline <script> at the bottom
+  // of login.html, but server.js's strict CSP forbids inline scripts
+  // (scriptSrc has no 'unsafe-inline'), so the inline block was silently
+  // blocked and the page rendered as a blank body. Moving it here (an
+  // external 'self' script, allowed by CSP) restored the reveal. Login-
+  // only: returns early if #authShell isn't on the page so this runs
+  // safely on every page that loads app.js.
+  async function loginSkip() {
+    const shell = document.getElementById('authShell');
+    if (!shell) return;
+    try {
+      const ok = await verifyAuth();
+      if (ok && authUser && authUser.role && typeof redirectToDashboard === 'function') {
+        // Admins, Drivers, and Customers each go to their own dashboard;
+        // no role gets the chance to land on /customer.html by mistake.
+        redirectToDashboard();
+        return;
+      }
+    } catch (_e) { /* network blip → fall through to reveal */ }
+    shell.style.visibility = 'visible';
+  }
+  onReady(loginSkip);
+
+  // ── Spinner helpers ────────────────────────────────────────────────
+  function showSpinner() { const el = document.getElementById('spinner'); if (el) el.style.display = 'block'; }
+  function hideSpinner() { const el = document.getElementById('spinner'); if (el) el.style.display = 'none'; }
+  function withSpinner(promise) { showSpinner(); return promise.finally(hideSpinner); }
+
+  // ── Geocoding helpers (used by driver + customer pages) ───────────
+  async function geocodeAddress(query) {
+    if (!query || query.length < 3) return [];
+    try {
+      const res = await fetch(`/api/geocode/search?q=${encodeURIComponent(query)}&limit=3`);
+      const data = await res.json();
+      return (data || []).map(item => ({ display: item.display_name, lat: parseFloat(item.lat), lon: parseFloat(item.lon) }));
+    } catch (e) { return []; }
+  }
+
+  // Small HTML escaper used by autocomplete template rendering.
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+
+  // Inject autocomplete CSS once, regardless of which stylesheet the page loads.
+  var _autocompleteCssInjected = false;
+  function injectAutocompleteCSS() {
+    if (_autocompleteCssInjected) return;
+    _autocompleteCssInjected = true;
+    var style = document.createElement('style');
+    style.textContent = [
+      '.autocomplete-suggestions{position:absolute;top:100%;left:0;right:0;z-index:9999;',
+      'max-height:132px;overflow-y:auto;overflow-x:hidden;background:#0f172a;',
+      'border:1px solid rgba(148,163,184,0.3);border-radius:8px;margin-top:2px;',
+      'box-shadow:0 8px 24px rgba(0,0,0,0.6);}',
+      '.autocomplete-item{padding:7px 10px;color:#cbd5e1;font-size:0.8rem;line-height:1.35;',
+      'cursor:pointer;border-bottom:1px solid rgba(148,163,184,0.08);',
+      'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .12s;}',
+      '.autocomplete-item:last-child{border-bottom:none;}',
+      '.autocomplete-item:hover,.autocomplete-item.is-highlighted{background:rgba(34,211,238,0.12);color:#22d3ee;outline:none;}'
+    ].join('');
+    document.head.appendChild(style);
+  }
+
+  /**
+   * setupAddressAutocomplete(inputEl) — attaches real-address autocomplete
+   * to a text input. Creates a suggestion dropdown dynamically below the
+   * input, fetches results from Nominatim (via /api/geocode/search), and
+   * supports keyboard navigation (ArrowDown/Up/Enter/Escape) plus click.
+   *
+   * Usage:
+   *   setupAddressAutocomplete(document.getElementById('bookingOrigin'));
+   */
+  function setupAddressAutocomplete(input) {
+    injectAutocompleteCSS();
+    if (!input || input.dataset.autocompleteBound === '1') return;
+    input.dataset.autocompleteBound = '1';
+    input.setAttribute('autocomplete', 'off');
+    input.setAttribute('aria-autocomplete', 'list');
+
+    var debugId = input.id || ('el-' + Math.random().toString(36).slice(2, 6));
+    console.log('[autocomplete] binding to', debugId);
+
+    // Wrap input in a position:relative container so the absolutely-positioned
+    // dropdown stays anchored to the input regardless of grid/flex parent layout.
+    const container = document.createElement('div');
+    container.style.position = 'relative';
+    container.style.width = '100%';
+    input.parentNode.insertBefore(container, input);
+    container.appendChild(input);
+
+    // Create suggestion dropdown inside the container
+    const wrapper = document.createElement('div');
+    wrapper.className = 'autocomplete-suggestions';
+    wrapper.style.display = 'none';
+    wrapper.setAttribute('role', 'listbox');
+    container.appendChild(wrapper);
+    input.setAttribute('aria-expanded', 'false');
+
+    let debounceTimer = null;
+    let activeIndex = -1;
+    let results = [];
+
+    function hideSuggestions() {
+      wrapper.style.display = 'none';
+      wrapper.innerHTML = '';
+      input.setAttribute('aria-expanded', 'false');
+      activeIndex = -1;
+      results = [];
+    }
+
+    function highlightItem(index) {
+      const items = wrapper.querySelectorAll('.autocomplete-item');
+      items.forEach((el, i) => {
+        el.classList.toggle('is-highlighted', i === index);
+        el.setAttribute('aria-selected', i === index ? 'true' : 'false');
+      });
+      if (index >= 0 && items[index]) {
+        items[index].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    input.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const query = input.value.trim();
+      if (query.length < 3) { hideSuggestions(); return; }
+
+      debounceTimer = setTimeout(async () => {
+        console.log('[autocomplete] searching "'+query+'" via '+debugId);
+        results = await geocodeAddress(query);
+        console.log('[autocomplete] got '+results.length+' results for "'+query+'"');
+        if (!results.length) {
+          wrapper.innerHTML = '<div class="autocomplete-item" style="color:var(--text-muted);cursor:default;">No results found</div>';
+          wrapper.style.display = 'block';
+          input.setAttribute('aria-expanded', 'true');
+          activeIndex = -1;
+          return;
+        }
+        wrapper.innerHTML = results.map(function (r, i) {
+          var short = (r.display || '').length > 70 ? (r.display || '').slice(0, 67) + '…' : r.display;
+          return '<div class="autocomplete-item" role="option" data-index="'+i+'" data-lat="'+r.lat+'" data-lon="'+r.lon+'">'+escapeHtml(short)+'</div>';
+        }).join('');
+        wrapper.style.display = 'block';
+        input.setAttribute('aria-expanded', 'true');
+        activeIndex = -1;
+      }, 300);
+    });
+
+    // Keyboard navigation
+    input.addEventListener('keydown', (e) => {
+      if (wrapper.style.display === 'none') return;
+      const items = wrapper.querySelectorAll('.autocomplete-item');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIndex = Math.min(activeIndex + 1, items.length - 1);
+        highlightItem(activeIndex);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIndex = Math.max(activeIndex - 1, 0);
+        highlightItem(activeIndex);
+      } else if (e.key === 'Enter') {
+        if (activeIndex >= 0 && items[activeIndex]) {
+          e.preventDefault();
+          items[activeIndex].click();
+        }
+      } else if (e.key === 'Escape') {
+        hideSuggestions();
+      }
+    });
+
+    // Click to select
+    wrapper.addEventListener('click', (e) => {
+      const item = e.target && e.target.closest && e.target.closest('.autocomplete-item');
+      if (!item || item.dataset.index === undefined) return;
+      const r = results[parseInt(item.dataset.index)];
+      if (r) {
+        input.value = r.display;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      hideSuggestions();
+    });
+
+    // Close on outside click
+    document.addEventListener('click', (e) => {
+      if (!input.contains(e.target) && !wrapper.contains(e.target)) {
+        hideSuggestions();
+      }
+    });
+
+    // Close on blur (delayed so click can register)
+    input.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (!wrapper.contains(document.activeElement)) hideSuggestions();
+      }, 150);
+    });
+  }
+
+  // ── Toast / snackbar ───────────────────────────────────────────────
+  // Use notify('message', { kind: 'success' | 'error' | 'info', timeoutMs: 3500 })
+  function ensureToastContainer() {
+    let c = document.getElementById('ssToastContainer');
+    if (c) return c;
+    c = document.createElement('div');
+    c.id = 'ssToastContainer';
+    c.className = 'ss-toast-container';
+    document.body.appendChild(c);
+    return c;
+  }
+  function notify(message, opts = {}) {
+    const kind = opts.kind || 'info';
+    const time = opts.timeoutMs ?? 3500;
+    const c = ensureToastContainer();
+    const el = document.createElement('div');
+    el.className = 'ss-toast ss-toast--' + kind;
+    el.setAttribute('role', 'status');
+    el.innerHTML = `
+      <span class="ss-toast-icon">${{success:'✓',error:'!',info:'i',warn:'!'}[kind] || 'i'}</span>
+      <span class="ss-toast-text"></span>
+      <button class="ss-toast-close" type="button" aria-label="Dismiss">×</button>`;
+    el.querySelector('.ss-toast-text').textContent = message;
+    el.querySelector('.ss-toast-close')?.addEventListener('click', () => el.remove());
+    c.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('is-visible'));
+    if (time > 0) setTimeout(() => { el.classList.remove('is-visible'); setTimeout(() => el.remove(), 220); }, time);
+    return el;
+  }
+
+  // ── Expose ────────────────────────────────────────────────────────
+  Object.defineProperty(window, 'authUser', { get() { return authUser; }, set(v) { authUser = (v && typeof v === 'object') ? v : null; } });
+  Object.defineProperty(window, 'authToken', { get() { return authToken; }, set(v) { persistAuth(v); } });
+  window.verifyAuth = verifyAuth;
+  window.requireAuth = requireAuth;
+  window.api = api;
+  window.redirectToDashboard = redirectToDashboard;
+  window.logoutUser = logoutUser;
+  window.loginUser = loginUser;
+  window.registerUser = registerUser;
+  window.recoverAccount = recoverAccount;
+  window.registerPasskey = registerPasskey;
+  window.loginPasskey = loginPasskey;
+  window.dashboardForRole = dashboardForRole;
+  window.geocodeAddress = geocodeAddress;
+  window.setupAddressAutocomplete = setupAddressAutocomplete;
+  window.showSpinner = showSpinner;
+  window.hideSpinner = hideSpinner;
+  window.withSpinner = withSpinner;
+  window.notify = notify;
+})();

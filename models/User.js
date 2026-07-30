@@ -9,6 +9,15 @@ const UserSchema = new mongoose.Schema({
   credentialPublicKey: { type: String },
   credentialCounter: { type: Number, default: 0 },
   recoveryEmail: { type: String },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  credentials: {
+    type: [{
+      credentialID: { type: String, required: true },
+      credentialPublicKey: { type: String, required: true },
+      counter: { type: Number, default: 0 },
+      transports: [String]
+    }],
+    default: []
+  }
 });
 module.exports = mongoose.model('User', UserSchema);

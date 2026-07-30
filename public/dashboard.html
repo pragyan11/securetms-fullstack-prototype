@@ -3,164 +3,465 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SecureTMS – Dashboard</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>SecureTMS — Operations console</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10' fill='none' stroke='%230F4C81' stroke-width='1.6'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="/libs/leaflet/leaflet.css" />
+  <style>
+    /* ── World-Class Dashboard Additions ── */
+    .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+    .toolbar .search-box { flex:1; min-width:220px; position:relative; }
+    .toolbar .search-box input { padding-left:36px; height:40px; font-size:13px; }
+    .toolbar .search-box svg { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-dim); width:16px; height:16px; }
+    .toolbar select { width:auto; min-width:130px; height:40px; font-size:13px; }
+    .quick-actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+    .quick-actions .btn { font-size:13px; }
+    .sortable { cursor:pointer; user-select:none; transition:color 0.15s; }
+    .sortable:hover { color:var(--navy-700); }
+    .sortable .sort-icon { display:inline-block; width:12px; margin-left:4px; opacity:0.3; }
+    .sortable.sort-asc .sort-icon::after { content:'▲'; opacity:1; }
+    .sortable.sort-desc .sort-icon::after { content:'▼'; opacity:1; }
+    .pagination { display:flex; gap:6px; align-items:center; justify-content:center; padding:14px 0; }
+    .pagination button { min-width:32px; height:32px; border-radius:6px; border:1px solid var(--border); background:white; font-size:13px; cursor:pointer; transition:all 0.15s; }
+    .pagination button:hover { background:var(--bg-soft); }
+    .pagination button.is-active { background:var(--navy-700); color:white; border-color:var(--navy-700); }
+    .pagination button:disabled { opacity:0.4; cursor:not-allowed; }
+    .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-bottom:20px; }
+    .stat-card { background:white; border:1px solid var(--border-soft); border-radius:var(--r-lg); padding:16px; text-align:center; }
+    .stat-card .stat-value { font-size:28px; font-weight:700; color:var(--text-hi); }
+    .stat-card .stat-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-top:4px; }
+    .stat-card .stat-trend { font-size:12px; font-weight:600; margin-top:4px; }
+    .stat-card .stat-trend.up { color:var(--green-600); }
+    .stat-card .stat-trend.down { color:var(--red-600); }
+    .notifications-panel { position:fixed; right:0; top:0; bottom:0; width:360px; max-width:90vw; background:white; z-index:999; box-shadow:-4px 0 24px rgba(0,0,0,0.1); transform:translateX(100%); transition:transform 0.3s ease; display:flex; flex-direction:column; }
+    .notifications-panel.is-open { transform:translateX(0); }
+    .notifications-panel .panel-header { padding:16px 20px; border-bottom:1px solid var(--border-soft); display:flex; justify-content:space-between; align-items:center; }
+    .notifications-panel .panel-body { flex:1; overflow-y:auto; padding:12px; }
+    .notifications-panel .notif-item { padding:10px 12px; border-radius:8px; margin-bottom:6px; border-left:3px solid var(--navy-700); background:var(--bg-soft); font-size:13px; cursor:pointer; transition:background 0.15s; }
+    .notifications-panel .notif-item:hover { background:var(--navy-50); }
+    .notifications-panel .notif-item .notif-time { font-size:11px; color:var(--text-dim); margin-top:2px; }
+    .notif-badge { position:relative; }
+    .notif-badge::after { content:attr(data-count); position:absolute; top:-6px; right:-10px; background:var(--red-600); color:white; font-size:10px; font-weight:700; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; display:none; }
+    .notif-badge.has-unread::after { display:flex; }
+    .notif-backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.3); z-index:998; display:none; }
+    .notif-backdrop.is-open { display:block; }
+    .chart-container { background:white; border:1px solid var(--border-soft); border-radius:var(--r-lg); padding:20px; margin-bottom:20px; }
+    .chart-container .chart-title { font-size:14px; font-weight:600; margin-bottom:14px; }
+    .bar-chart { display:flex; align-items:flex-end; gap:8px; height:120px; padding-top:8px; }
+    .bar-chart .bar { flex:1; background:var(--navy-700); border-radius:4px 4px 0 0; position:relative; min-width:24px; transition:height 0.4s ease; }
+    .bar-chart .bar .bar-label { position:absolute; bottom:-22px; left:50%; transform:translateX(-50%); font-size:10px; color:var(--text-muted); white-space:nowrap; }
+    .bar-chart .bar .bar-value { position:absolute; top:-18px; left:50%; transform:translateX(-50%); font-size:11px; font-weight:600; color:var(--text-hi); }
+    .status-timeline { list-style:none; margin:0; padding:0; position:relative; }
+    .status-timeline::before { content:''; position:absolute; left:15px; top:8px; bottom:8px; width:2px; background:var(--border); border-radius:2px; }
+    .status-timeline li { display:flex; gap:12px; align-items:flex-start; padding:8px 0; position:relative; }
+    .status-timeline li .step-dot { width:12px; height:12px; border-radius:50%; background:var(--border-strong); flex-shrink:0; margin-top:4px; border:2px solid white; box-shadow:0 0 0 1px var(--border); z-index:1; }
+    .status-timeline li.completed .step-dot { background:var(--green-500); }
+    .status-timeline li.active .step-dot { background:var(--navy-700); box-shadow:0 0 0 3px rgba(15,76,129,0.2); }
+    .status-timeline li .step-text { font-size:12px; color:var(--text-muted); }
+    .status-timeline li.completed .step-text, .status-timeline li.active .step-text { color:var(--text-hi); font-weight:600; }
+    .theme-toggle { background:none; border:1px solid var(--border); border-radius:var(--r-pill); width:36px; height:36px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+    .theme-toggle:hover { background:var(--bg-soft); }
+    body.dark { --bg-app:#0F172A; --bg-card:#1E293B; --bg-soft:#1E293B; --bg-elevated:#1E293B; --border-soft:#334155; --border:#334155; --border-strong:#475569; --text-hi:#F1F5F9; --text:#CBD5E1; --text-muted:#94A3B8; --text-soft:#94A3B8; --text-dim:#64748B; --text-faint:#475569; --navy-50:#1E3A5F; --amber-50:#3D2E1A; --green-50:#1A3D2E; --red-50:#3D1A1A; --blue-50:#1A2E4D; }
+    body.dark .sidebar { background:#1E293B; }
+    body.dark .main { background:#0F172A; }
+    body.dark .card, body.dark .kpi, body.dark .stat-card, body.dark .chart-container { background:#1E293B; }
+    body.dark .table thead th { background:#1E293B; }
+    body.dark .btn-secondary { background:#334155; color:#E2E8F0; border-color:#475569; }
+    body.dark .btn-secondary:hover { background:#475569; }
+    body.dark input, body.dark select, body.dark textarea { background:#334155; border-color:#475569; color:#E2E8F0; }
+    body.dark input::placeholder { color:#64748B; }
+    body.dark .ss-toast { background:#1E293B; color:#E2E8F0; }
+  </style>
 </head>
 <body>
-  <div class="app">
-    <header class="topbar">
-      <a class="brand" href="index.html">Secure<span>TMS</span></a>
-      <nav>
-        <a href="index.html">Home</a>
-        <a href="dashboard.html">Dashboard</a>
-        <a href="register.html">Register</a>
-        <a href="login.html">Login</a>
-      </nav>
-    </header>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Operations navigation">
+      <a href="index.html" class="brand sidebar-brand">
+        <span class="brand-mark">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <path d="M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10"/>
+          </svg>
+        </span>
+        <strong>Secure<span class="brand-tms">TMS</span></strong>
+      </a>
 
-    <main class="container">
-      <section class="card dashboard-card" id="dashboard">
-        <div class="dashboard-header">
-          <div>
-            <p class="eyebrow">Operations console</p>
-            <h2>Dashboard</h2>
+      <div class="nav-section">
+        <div class="nav-section-label">Operations</div>
+        <a href="#overview" class="nav-link is-active" data-tab="overviewTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          Overview
+        </a>
+        <a href="#bookings" class="nav-link" data-tab="bookingsTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="14" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>
+          Bookings
+        </a>
+        <a href="#shipments" class="nav-link" data-tab="shipmentsTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="11" height="9" rx="1"/><path d="M14 12 H19 L22 15 V18 H14 Z"/><circle cx="7" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
+          Shipments
+        </a>
+        <a href="#fleet" class="nav-link" data-tab="fleetTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="13" height="6" rx="1"/><path d="M16 13 L20 13 L22 16 V19 H16 Z"/><circle cx="7" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>
+          Fleet
+        </a>
+        <a href="#maintenance" class="nav-link" data-tab="maintenanceTab" id="maintenanceNavLink" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg>
+          Maintenance
+        </a>
+        <a href="#map" class="nav-link" data-tab="mapTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 L3 6 V20 L9 18 L15 20 L21 18 V4 L15 6 Z"/><line x1="9" y1="4" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="20"/></svg>
+          Live map
+        </a>
+        <a href="#dispatch" class="nav-link" data-tab="dispatchTab" id="dispatchNavLink" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="17" y1="14" x2="21" y2="14"/><line x1="19" y1="12" x2="19" y2="16"/></svg>
+          Dispatch
+        </a>
+        <a href="#analytics" class="nav-link" data-tab="analyticsTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="4" height="10" rx="1"/><rect x="10" y="4" width="4" height="13" rx="1"/><rect x="17" y="10" width="4" height="7" rx="1"/></svg>
+          Analytics
+        </a>
+        <a href="#logs" class="nav-link" data-tab="logsTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="4" x2="6" y2="20"/><path d="M9 6 H17M9 10 H17M9 14 H14M9 18 H17"/></svg>
+          Audit logs
+        </a>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Admin</div>
+        <a href="#team" class="nav-link admin-only" data-tab="teamTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M3 20 a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15 20 a5 5 0 0 1 6.5 -4.78"/></svg>
+          Team
+        </a>
+        <a href="#invites" class="nav-link admin-only" data-tab="invitesTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8 L12 14 L21 8 M3 8 V18 a2 2 0 0 0 2 2 H19 a2 2 0 0 0 2 -2 V8 M3 8 a2 2 0 0 1 2 -2 H19 a2 2 0 0 1 2 2"/></svg>
+          Invitations
+        </a>
+      </div>
+
+      <div class="nav-section" style="margin-top:auto;">
+        <button class="theme-toggle" id="themeToggle" type="button" title="Toggle dark mode" aria-label="Toggle theme">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+        </button>
+        <button class="btn btn-ghost btn-sm notif-badge" id="notifBell" type="button" style="margin-bottom:8px;" title="Notifications">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 17h4V10a6 6 0 0 0-12 0v7h4M14 17a2 2 0 0 1-4 0"/></svg>
+          Alerts
+        </button>
+        <div class="user-chip" id="userChip" aria-haspopup="menu">
+          <span class="user-chip-avatar" id="userAvatar">A</span>
+          <div class="user-chip-text">
+            <span class="user-chip-name" id="userName">Admin</span>
+            <span class="user-chip-role">Admin</span>
           </div>
-          <button class="btn btn-secondary" id="logoutBtn" type="button" aria-label="Logout">Logout</button>
+          <div style="display:flex;gap:4px;margin-left:auto;">
+            <a href="user_details.html" class="btn btn-ghost btn-sm" title="My account" aria-label="My account">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20 a8 8 0 0 1 16 0"/></svg>
+            </a>
+            <button id="logoutBtn" class="btn btn-ghost btn-sm" type="button">Sign out</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="main-header">
+        <div>
+          <span class="eyebrow">Operations</span>
+          <h1>Operations console</h1>
+          <p class="sub" id="headerSub">Full visibility across bookings, vehicles, shipments, and the audit trail.</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-secondary btn-sm" id="exportCurrentBtn" type="button" title="Export current view">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            Export CSV
+          </button>
+          <button class="btn" id="refreshAllBtn" type="button" data-default-label="Refresh all">Refresh all</button>
+        </div>
+      </header>
+
+      <section class="main-body">
+        <div class="kpi-grid" id="kpis">
+          <div class="kpi"><div><div class="kpi-label">Bookings</div><div class="kpi-value" id="kpiBookingsValue"><span class="skeleton" style="display:inline-block;width:64px;height:20px;"></span></div></div><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="14" y2="13"/></svg></div></div>
+          <div class="kpi"><div><div class="kpi-label">Active shipments</div><div class="kpi-value" id="kpiShipmentsValue"><span class="skeleton" style="display:inline-block;width:64px;height:20px;"></span></div></div><div class="kpi-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="11" height="9" rx="1"/><path d="M14 12 H19 L22 15 V18 H14 Z"/><circle cx="7" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg></div></div>
+          <div class="kpi"><div><div class="kpi-label">Vehicles</div><div class="kpi-value" id="kpiFleetValue"><span class="skeleton" style="display:inline-block;width:64px;height:20px;"></span></div></div><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="13" height="6" rx="1"/><path d="M16 13 L20 13 L22 16 V19 H16 Z"/><circle cx="7" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg></div></div>
+          <div class="kpi"><div><div class="kpi-label">Users</div><div class="kpi-value" id="kpiUsersValue"><span class="skeleton" style="display:inline-block;width:64px;height:20px;"></span></div></div><div class="kpi-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M3 20 a6 6 0 0 1 12 0"/></svg></div></div>
         </div>
 
-        <div class="output-panel">
-          <div class="output-toolbar">
-            <h3>System response</h3>
-            <div class="inner-tabs">
-              <button class="inner-tab active" data-tab="bookingsTab">Bookings</button>
-              <button class="inner-tab" data-tab="shipmentsTab">Shipments</button>
-              <button class="inner-tab" data-tab="fleetTab">Fleet</button>
-              <button class="inner-tab" data-tab="logsTab">Logs</button>
-              <button class="inner-tab" data-tab="adminTab">Admin Stats</button>
-            </div>
-          </div>
+        <!-- Quick Actions -->
+        <div class="quick-actions" id="quickActions" style="display:none;">
+          <button class="btn btn-sm" id="quickNewBookingBtn">+ New Booking</button>
+          <button class="btn btn-sm" id="quickNewShipmentBtn">+ New Shipment</button>
+          <button class="btn btn-sm" id="quickAddVehicleBtn">+ Add Vehicle</button>
+          <button class="btn btn-accent btn-sm" id="newInviteBtn">Generate Admin Invite</button>
+        </div>
 
-          <div class="tab-content" id="bookingsTab">
-            <div class="tab-actions">
-                  <button class="btn btn-secondary" id="addBookingBtn" type="button" aria-label="Add Booking">Add Booking</button>
-                  <button class="btn btn-secondary" id="refreshBookingsBtn" type="button" aria-label="Refresh Bookings">Refresh</button>
-              </div>
-              <div id="bookingFormContainer" class="hidden" style="margin-top:12px;">
-                  <form id="bookingForm" class="card form-card">
-                    <h3 class="eyebrow">New Booking</h3>
-                    <label for="bookingCustomer">Customer Name</label>
-                    <input type="text" id="bookingCustomer" name="customerName" class="form-control mb-2" required aria-label="Customer Name">
-                    <label for="bookingOrigin">Origin</label>
-                    <input type="text" id="bookingOrigin" name="origin" class="form-control mb-2" required aria-label="Origin">
-                    <label for="bookingDestination">Destination</label>
-                    <input type="text" id="bookingDestination" name="destination" class="form-control mb-2" required aria-label="Destination">
-                    <label for="bookingStatus">Status</label>
-                    <select id="bookingStatus" name="status" class="form-control mb-2">
-                      <option value="Pending">Pending</option>
-                      <option value="Confirmed">Confirmed</option>
-                      <option value="Completed">Completed</option>
-                    </select>
-                    <div class="button-group">
-                      <button type="submit" class="btn btn-primary" aria-label="Create Booking">Create Booking</button>
-                      <button type="button" class="btn btn-secondary" id="cancelBookingBtn" aria-label="Cancel Booking">Cancel</button>
-                    </div>
-                  </form>
-              </div>
-                <div id="bookingsOutput" class="tab-output">Loading bookings…</div>
-          </div>
+        <!-- Overview Tab -->
+        <div class="card" id="overviewTab"><div class="card-header"><div class="card-title">Overview</div><div class="card-sub">Today's activity and booking board at a glance.</div></div>
+          <div id="overviewOutput" class="empty-state">Loading…</div>
+        </div>
 
-          <div class="tab-content hidden" id="shipmentsTab">
-            <div class="tab-actions">
-                  <button class="btn btn-secondary" id="addShipmentBtn" type="button" aria-label="Add Shipment">Add Shipment</button>
-                  <button class="btn btn-secondary" id="refreshShipmentsBtn" type="button" aria-label="Refresh Shipments">Refresh Shipments</button>
-              </div>
-              <div id="shipmentFormContainer" class="hidden" style="margin-top:12px;">
-                  <form id="shipmentForm" class="card form-card">
-                    <h3 class="eyebrow">New Shipment</h3>
-                    <label for="shipmentId">Shipment ID</label>
-                    <input type="text" id="shipmentId" name="shipmentId" placeholder="Optional" class="form-control mb-2" aria-label="Shipment ID (optional)">
-                    <label for="vehicleNumber">Vehicle Number</label>
-                    <input type="text" id="vehicleNumber" name="vehicleNumber" class="form-control mb-2" required aria-label="Vehicle Number">
-                    <label for="driverName">Driver Name</label>
-                    <input type="text" id="driverName" name="driverName" class="form-control mb-2" required aria-label="Driver Name">
-                    <label for="shipmentStatus">Status</label>
-                    <select id="shipmentStatus" name="status" class="form-control mb-2">
-                      <option value="Created">Created</option>
-                      <option value="In Transit">In Transit</option>
-                      <option value="Delivered">Delivered</option>
-                    </select>
-                    <label for="location">Location</label>
-                    <input type="text" id="location" name="location" class="form-control mb-2" required aria-label="Location">
-                    <div class="button-group">
-                      <button type="submit" class="btn btn-primary" aria-label="Create Shipment">Create Shipment</button>
-                      <button type="button" class="btn btn-secondary" id="cancelShipmentBtn" aria-label="Cancel Shipment">Cancel</button>
-                    </div>
-                  </form>
-              </div>
-                <div id="shipmentsOutput" class="tab-output">Loading shipments…</div>
+        <!-- Bookings Tab -->
+        <div class="card" id="bookingsTab" style="display:none">
+          <div class="card-header"><div class="card-title">Bookings</div><button class="btn btn-sm" id="createBookingBtn">+ New Booking</button></div>
+          <div class="toolbar">
+            <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="bookingsSearch" placeholder="Search bookings…" /></div>
+            <select id="bookingsStatusFilter"><option value="">All statuses</option><option value="Pending">Pending</option><option value="Confirmed">Confirmed</option><option value="Completed">Completed</option></select>
+            <button class="btn btn-secondary btn-sm" id="refreshBookingsBtn">Refresh</button>
+            <button class="btn btn-secondary btn-sm" id="exportBookingsBtn">Export CSV</button>
           </div>
+          <table class="table"><thead><tr>
+            <th class="sortable" data-sort="customerName">Customer <span class="sort-icon"></span></th>
+            <th class="sortable" data-sort="origin">Origin → Destination <span class="sort-icon"></span></th>
+            <th class="sortable" data-sort="status">Status <span class="sort-icon"></span></th>
+            <th class="sortable" data-sort="serviceZone">Zone <span class="sort-icon"></span></th>
+            <th class="sortable" data-sort="createdAt">Created <span class="sort-icon"></span></th>
+            <th>Actions</th>
+          </tr></thead><tbody id="bookingsOutput"></tbody></table>
+          <div class="pagination" id="bookingsPagination"></div>
+        </div>
 
-          <div class="tab-content hidden" id="fleetTab">
-            <div class="tab-actions">
-                  <button class="btn btn-secondary" id="addVehicleBtn" type="button" aria-label="Add Vehicle">Add Vehicle</button>
-                  <button class="btn btn-secondary" id="refreshFleetBtn" type="button" aria-label="Refresh Fleet">Refresh Fleet</button>
-              </div>
-              <div id="vehicleFormContainer" class="hidden" style="margin-top:12px;">
-                  <form id="vehicleForm" class="card form-card">
-                    <h3 class="eyebrow">New Vehicle</h3>
-                    <label for="vehicleNumber">Vehicle Number</label>
-                    <input type="text" id="vehicleNumber" name="vehicleNumber" class="form-control mb-2" required aria-label="Vehicle Number">
-                    <label for="vehicleType">Vehicle Type</label>
-                    <input type="text" id="vehicleType" name="vehicleType" class="form-control mb-2" required aria-label="Vehicle Type">
-                    <label for="driverName">Driver Name</label>
-                    <input type="text" id="driverName" name="driverName" placeholder="Unassigned" class="form-control mb-2" aria-label="Driver Name">
-                    <label for="location">Location</label>
-                    <input type="text" id="location" name="location" placeholder="Hub" class="form-control mb-2" aria-label="Location">
-                    <label for="vehicleStatus">Status</label>
-                    <select id="vehicleStatus" name="status" class="form-control mb-2">
-                      <option value="Available">Available</option>
-                      <option value="In Transit">In Transit</option>
-                      <option value="Maintenance">Maintenance</option>
-                    </select>
-                    <div class="button-group">
-                      <button type="submit" class="btn btn-primary" aria-label="Add Vehicle">Add Vehicle</button>
-                      <button type="button" class="btn btn-secondary" id="cancelVehicleBtn" aria-label="Cancel Vehicle">Cancel</button>
-                    </div>
-                  </form>
-              </div>
-                <div id="fleetOutput" class="tab-output">Loading fleet…</div>
+        <!-- Shipments Tab -->
+        <div class="card" id="shipmentsTab" style="display:none">
+          <div class="card-header"><div class="card-title">Shipments</div><button class="btn btn-sm" id="createShipmentBtn">+ New Shipment</button></div>
+          <div class="toolbar">
+            <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="shipmentsSearch" placeholder="Search shipments…" /></div>
+            <select id="shipmentsStatusFilter"><option value="">All statuses</option><option value="Created">Created</option><option value="Picked Up">Picked Up</option><option value="In Transit">In Transit</option><option value="Delivered">Delivered</option><option value="Cancelled">Cancelled</option></select>
+            <button class="btn btn-secondary btn-sm" id="refreshShipmentsBtn">Refresh</button>
+            <button class="btn btn-secondary btn-sm" id="exportShipmentsBtn">Export CSV</button>
           </div>
+          <table class="table"><thead><tr>
+            <th class="sortable" data-sort="trackingId">Tracking <span class="sort-icon"></span></th>
+            <th class="sortable" data-sort="pickupAddress">Pickup → Delivery <span class="sort-icon"></span></th>
+            <th>Vehicle</th>
+            <th>Driver</th>
+            <th>Status</th>
+            <th class="sortable" data-sort="eta">ETA <span class="sort-icon"></span></th>
+            <th>Actions</th>
+          </tr></thead><tbody id="shipmentsOutput"></tbody></table>
+          <div class="pagination" id="shipmentsPagination"></div>
+        </div>
 
-          <div class="tab-content hidden" id="logsTab">
-            <div class="tab-actions">
-              <button class="btn btn-secondary" id="refreshLogsBtn" type="button" aria-label="Refresh Logs">Refresh Logs</button>
-            </div>
-            <pre id="logsOutput" class="tab-output">Loading logs…</pre>
+        <!-- Fleet Tab -->
+        <div class="card" id="fleetTab" style="display:none">
+          <div class="card-header"><div class="card-title">Fleet</div><button class="btn btn-sm" id="addVehicleQuickBtn" type="button">+ Add Vehicle</button></div>
+          <div class="toolbar">
+            <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="fleetSearch" placeholder="Search fleet…" /></div>
+            <select id="fleetStatusFilter"><option value="">All statuses</option><option value="Available">Available</option><option value="In Transit">In Transit</option><option value="Maintenance">Maintenance</option></select>
+            <button class="btn btn-secondary btn-sm" id="refreshFleetBtn">Refresh</button>
           </div>
+          <table class="table"><thead><tr>
+            <th class="sortable" data-sort="vehicleNumber">Vehicle <span class="sort-icon"></span></th>
+            <th>Type</th>
+            <th>Driver</th>
+            <th>Location</th>
+            <th class="sortable" data-sort="status">Status <span class="sort-icon"></span></th>
+            <th>Zone</th>
+            <th>Actions</th>
+          </tr></thead><tbody id="fleetOutput"></tbody></table>
+          <div class="pagination" id="fleetPagination"></div>
+        </div>
 
-          <div class="tab-content hidden" id="adminTab">
-            <div class="tab-actions">
-              <button class="btn btn-secondary" id="refreshAdminBtn" type="button" aria-label="Refresh Admin Stats">Refresh Admin Stats</button>
-            </div>
-            <div class="tab-actions" style="margin-top:0.5rem;">
-              <button class="btn btn-secondary" id="showAdminUsersBtn" type="button" aria-label="Show Users">Show Users</button>
-              <button class="btn btn-secondary" id="showAdminBookingsBtn" type="button" aria-label="Show Bookings">Show Bookings</button>
-              <button class="btn btn-secondary" id="showAdminShipmentsBtn" type="button" aria-label="Show Shipments">Show Shipments</button>
-              <button class="btn btn-secondary" id="showAdminVehiclesBtn" type="button" aria-label="Show Vehicles">Show Vehicles</button>
-            </div>
-            <div id="adminOutput" class="tab-output">Loading admin stats…</div>
-            <div id="adminUsers" class="tab-output" style="display:none;"></div>
-            <div id="adminUserLogs" class="tab-output" style="display:none;"></div>
-            <div id="adminBookings" class="tab-output" style="display:none;"></div>
-            <div id="adminShipments" class="tab-output" style="display:none;"></div>
-            <div id="adminVehicles" class="tab-output" style="display:none;"></div>
+        <!-- Maintenance Tab -->
+        <div class="card" id="maintenanceTab" style="display:none">
+          <div class="card-header"><div class="card-title">Fleet Maintenance</div><button class="btn btn-sm" id="addMaintenanceBtn" type="button">+ Log Maintenance</button></div>
+          <div id="maintenanceOverdue" class="banner is-warning" style="display:none;"><span class="banner-icon">!</span><div class="banner-body"><p class="banner-title" id="maintenanceOverdueMsg"></p></div></div>
+          <table class="table"><thead><tr>
+            <th>Vehicle</th><th>Type</th><th>Description</th><th>Scheduled</th><th>Status</th><th>Cost</th><th>Actions</th>
+          </tr></thead><tbody id="maintenanceOutput"></tbody></table>
+        </div>
+
+        <!-- Dispatch Board -->
+        <div class="card" id="dispatchTab" style="display:none">
+          <div class="card-header"><div class="card-title">Dispatch Board</div><div class="card-sub">Drag shipments onto drivers to assign them instantly.</div><button class="btn btn-sm" id="refreshDispatchBtn">Refresh</button></div>
+          <div id="dispatchOutput"></div>
+          <style>.dispatch-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.1);transform:translateY(-1px);}</style>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div class="card" id="analyticsTab" style="display:none">
+          <div class="card-header"><div class="card-title">Analytics</div><div class="card-sub">Booking and shipment trends.</div></div>
+          <div class="stats-grid" id="analyticsStats"></div>
+          <div class="chart-container"><div class="chart-title">Bookings by Status</div><div class="bar-chart" id="bookingsBarChart"></div></div>
+          <div class="chart-container"><div class="chart-title">Shipments by Status</div><div class="bar-chart" id="shipmentsBarChart"></div></div>
+        </div>
+
+        <!-- Map -->
+        <div class="card" id="mapTab" style="display:none"><div class="card-header"><div class="card-title">Live map</div></div>
+          <div class="map-shell"><div id="liveMap" class="map-canvas" style="height:480px;"></div>
+            <div class="map-legend"><span class="legend-item"><span class="legend-dot" style="background:#0F4C81;"></span> Pickup</span><span class="legend-item"><span class="legend-dot" style="background:#FF6B35;"></span> Drop-off</span><span class="legend-item"><span class="legend-dot" style="background:#10B981;"></span> Delivered</span></div>
           </div>
+        </div>
+
+        <!-- Audit Logs -->
+        <div class="card" id="logsTab" style="display:none"><div class="card-header"><div class="card-title">Audit logs</div><button class="btn btn-secondary btn-sm" id="refreshLogsBtn">Refresh</button></div>
+          <table class="table"><thead><tr><th>When</th><th>Action</th><th>User</th><th>Details</th></tr></thead><tbody id="logsOutput"></tbody></table>
+        </div>
+
+        <!-- Team -->
+        <div class="card" id="teamTab" style="display:none"><div class="card-header"><div class="card-title">Team</div><button class="btn btn-secondary btn-sm" id="refreshUsersBtn">Refresh</button></div>
+          <table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th></tr></thead><tbody id="usersOutput"></tbody></table>
+        </div>
+
+        <!-- Invites -->
+        <div class="card" id="invitesTab" style="display:none"><div class="card-header"><div class="card-title">Invitations</div><button class="btn btn-sm" id="newInviteBtn2">Generate admin invite</button></div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Each invite produces a single-use URL containing an unguessable 64-character token. Share it through a secure channel. The link expires in 7 days.</p>
+          <table class="table"><thead><tr><th>Created</th><th>Role</th><th>Email</th><th>Expires</th><th>Used</th><th>Invite URL</th></tr></thead><tbody id="invitesOutput"></tbody></table>
         </div>
       </section>
+
+      <footer class="footer">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <span>© SecureTMS — Secured by FIDO2 / WebAuthn</span>
+          <span>Admin view</span>
+        </div>
+      </footer>
     </main>
   </div>
 
-  <script src="app.js"></script>
-  <script src="admin.js"></script>
-  </body>
+  <!-- Notifications Panel -->
+  <div class="notif-backdrop" id="notifBackdrop"></div>
+  <div class="notifications-panel" id="notifPanel">
+    <div class="panel-header"><h3 style="margin:0;">Notifications</h3><button class="btn btn-ghost btn-sm" id="closeNotifPanel">✕</button></div>
+    <div class="panel-body" id="notifBody"><div style="text-align:center;color:var(--text-muted);padding:24px;">No notifications yet</div></div>
+  </div>
+
+  <!-- Add Vehicle Modal -->
+  <div id="addVehicleModal" class="modal-overlay" style="display:none;" aria-hidden="true">
+    <div class="modal-card"><div class="modal-header"><div><div class="card-title">Add Vehicle</div></div><button type="button" class="btn btn-ghost btn-sm" data-close-modal="addVehicleModal">✕</button></div>
+      <form id="addVehicleForm" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+        <div><label>Vehicle Number</label><input id="avNumber" required /></div>
+        <div><label>Type</label><select id="avType"><option>Truck</option><option>Van</option><option>Bike</option><option>Car</option><option>SUV</option></select></div>
+        <div><label>Driver</label><input id="avDriver" /></div>
+        <div><label>Location</label><input id="avLocation" /></div>
+        <div><label>Status</label><select id="avStatus"><option value="Available">Available</option><option value="In Transit">In Transit</option><option value="Maintenance">Maintenance</option></select></div>
+        <div><label>Service Zone</label><select id="avZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
+        <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" data-close-modal="addVehicleModal">Cancel</button>
+          <button type="submit" class="btn">Add Vehicle</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Maintenance Modal -->
+  <div id="maintenanceModal" class="modal-overlay" style="display:none;" aria-hidden="true">
+    <div class="modal-card"><div class="modal-header"><div><div class="card-title">Log Maintenance</div></div><button type="button" class="btn btn-ghost btn-sm" data-close-modal="maintenanceModal">✕</button></div>
+      <form id="maintenanceForm" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+        <div style="grid-column:1/-1;"><label>Vehicle</label><select id="mntVehicle" required></select></div>
+        <div><label>Type</label><select id="mntType"><option value="Scheduled">Scheduled</option><option value="Unscheduled">Unscheduled</option><option value="Inspection">Inspection</option><option value="Oil Change">Oil Change</option><option value="Tire Rotation">Tire Rotation</option><option value="Brake Service">Brake Service</option><option value="Repair">Repair</option><option value="Other">Other</option></select></div>
+        <div><label>Status</label><select id="mntStatus"><option value="Scheduled">Scheduled</option><option value="In Progress">In Progress</option><option value="Completed">Completed</option><option value="Overdue">Overdue</option></select></div>
+        <div style="grid-column:1/-1;"><label>Description</label><input id="mntDesc" required /></div>
+        <div><label>Scheduled Date</label><input type="date" id="mntDate" /></div>
+        <div><label>Cost ($)</label><input type="number" id="mntCost" value="0" /></div>
+        <div style="grid-column:1/-1;"><label>Notes</label><input id="mntNotes" /></div>
+        <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" data-close-modal="maintenanceModal">Cancel</button>
+          <button type="submit" class="btn">Log Maintenance</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit Booking Modal -->
+  <div id="editBookingModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card"><div class="modal-header"><div><div class="card-title">Edit Booking</div></div><button type="button" class="btn btn-ghost btn-sm" data-close-modal="editBookingModal">✕</button></div>
+      <form id="editBookingForm" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+        <input type="hidden" id="ebId" />
+        <div style="grid-column:1/-1;"><label>Customer Name</label><input id="ebCustomer" /></div>
+        <div><label>Origin</label><input id="ebOrigin" /></div>
+        <div><label>Destination</label><input id="ebDestination" /></div>
+        <div><label>Status</label><select id="ebStatus"><option value="Pending">Pending</option><option value="Confirmed">Confirmed</option><option value="Completed">Completed</option></select></div>
+        <div><label>Zone</label><select id="ebZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
+        <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" data-close-modal="editBookingModal">Cancel</button>
+          <button type="submit" class="btn">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit Shipment Modal -->
+  <div id="editShipmentModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card"><div class="modal-header"><div><div class="card-title">Edit Shipment</div></div><button type="button" class="btn btn-ghost btn-sm" data-close-modal="editShipmentModal">✕</button></div>
+      <form id="editShipmentForm" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+        <input type="hidden" id="esId" />
+        <div style="grid-column:1/-1;"><label>Customer Name</label><input id="esCustomer" /></div>
+        <div><label>Pickup</label><input id="esPickup" /></div>
+        <div><label>Delivery</label><input id="esDelivery" /></div>
+        <div><label>Vehicle</label><input id="esVehicle" /></div>
+        <div><label>Driver</label><input id="esDriver" /></div>
+        <div><label>Status</label><select id="esStatus"><option value="Created">Created</option><option value="Picked Up">Picked Up</option><option value="In Transit">In Transit</option><option value="Delivered">Delivered</option><option value="Cancelled">Cancelled</option></select></div>
+        <div><label>ETA</label><input id="esEta" /></div>
+        <div><label>Current Location</label><input id="esLocation" /></div>
+        <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" data-close-modal="editShipmentModal">Cancel</button>
+          <button type="submit" class="btn">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create Booking Modal -->
+  <div id="createBookingModal" class="modal-overlay" style="display:none;" aria-hidden="true">
+    <div class="modal-card"><div class="modal-header"><div><div class="card-title">New Booking</div><div class="card-sub">Fill in the details to create a new booking.</div></div><button type="button" class="btn btn-ghost btn-sm" data-close-modal="createBookingModal">✕</button></div>
+      <form id="createBookingForm" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+        <div style="grid-column:1/-1;"><label>Customer Name <span style="color:var(--text-dim);">(optional)</span></label><input id="cbCustomer" placeholder="e.g. Acme Corp" /></div>
+        <div><label>Pickup Address <span style="color:var(--red-600);">*</span></label><input id="cbOrigin" placeholder="e.g. 123 Main St, Sydney" required /></div>
+        <div><label>Delivery Address <span style="color:var(--red-600);">*</span></label><input id="cbDestination" placeholder="e.g. 456 Park Ave, Melbourne" required /></div>
+        <div><label>Service Zone</label><select id="cbZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
+        <div><label>Priority</label><select id="cbPriority"><option value="Standard">Standard</option><option value="Express">Express</option><option value="Priority">Priority</option></select></div>
+        <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" data-close-modal="createBookingModal">Cancel</button>
+          <button type="submit" class="btn">Create Booking</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create Shipment Modal -->
+  <div id="createShipmentModal" class="modal-overlay" style="display:none;" aria-hidden="true">
+    <div class="modal-card"><div class="modal-header"><div><div class="card-title">New Shipment</div><div class="card-sub">Create a shipment and optionally assign a vehicle.</div></div><button type="button" class="btn btn-ghost btn-sm" data-close-modal="createShipmentModal">✕</button></div>
+      <form id="createShipmentForm" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+        <div style="grid-column:1/-1;"><label>Customer Name <span style="color:var(--text-dim);">(optional)</span></label><input id="csCustomer" placeholder="e.g. Jane Smith" /></div>
+        <div><label>Pickup Address <span style="color:var(--red-600);">*</span></label><input id="csPickup" placeholder="e.g. 10 Queen St, Brisbane" required /></div>
+        <div><label>Delivery Address <span style="color:var(--red-600);">*</span></label><input id="csDelivery" placeholder="e.g. 50 King St, Perth" required /></div>
+        <div><label>Vehicle Number <span style="color:var(--text-dim);">(optional)</span></label><input id="csVehicle" placeholder="e.g. TRK-001" /></div>
+        <div><label>Driver Name <span style="color:var(--text-dim);">(optional)</span></label><input id="csDriver" placeholder="e.g. John Doe" /></div>
+        <div><label>Initial Status</label><select id="csStatus"><option value="Created">Created</option><option value="Picked Up">Picked Up</option><option value="In Transit">In Transit</option></select></div>
+        <div><label>ETA <span style="color:var(--text-dim);">(optional)</span></label><input id="csEta" placeholder="e.g. 2-3 business days" /></div>
+        <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" data-close-modal="createShipmentModal">Cancel</button>
+          <button type="submit" class="btn">Create Shipment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit Vehicle Modal -->
+  <div id="editVehicleModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card"><div class="modal-header"><div><div class="card-title">Edit Vehicle</div></div><button type="button" class="btn btn-ghost btn-sm" data-close-modal="editVehicleModal">✕</button></div>
+      <form id="editVehicleForm" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
+        <input type="hidden" id="evId" />
+        <div><label>Vehicle Number</label><input id="evNumber" /></div>
+        <div><label>Type</label><input id="evType" /></div>
+        <div><label>Driver</label><input id="evDriver" /></div>
+        <div><label>Location</label><input id="evLocation" /></div>
+        <div><label>Status</label><select id="evStatus"><option value="Available">Available</option><option value="In Transit">In Transit</option><option value="Maintenance">Maintenance</option></select></div>
+        <div><label>Zone</label><select id="evZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
+        <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
+          <button type="button" class="btn btn-secondary" data-close-modal="editVehicleModal">Cancel</button>
+          <button type="submit" class="btn">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="utils.js" defer></script>
+  <script src="ui-utils.js" defer></script>
+  <script src="app.js" defer></script>
+  <script src="dashboard-page.js" defer></script>
+  <script src="/libs/leaflet/leaflet.js" defer></script>
+  <script src="/socket.io/socket.io.js" defer></script>
+</body>
 </html>
