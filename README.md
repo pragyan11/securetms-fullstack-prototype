@@ -147,10 +147,10 @@ This prototype is provided **as‑is** for educational purposes. See the `LICENS
 | Name | Role | GitHub |
 |------|------|--------|
 | Pragyan | Project Lead / Backend | [pragyan11](https://github.com/pragyan11) |
-| Member 2 | Front‑end UI | [github.com/member2](https://github.com/member2) |
-| Member 3 | Database & Models | [github.com/member3](https://github.com/member3) |
-| Member 4 | DevOps / CI | [github.com/member4](https://github.com/member4) |
-| Member 5 | Documentation & Testing | [github.com/member5](https://github.com/member5) |
+| Member 2 | Front‑end UI | [swastikakarki-eng](https://github.com/swastikakarki-eng) |
+| Member 3 | Database & Models | [github.com/123sumitra](https://github.com/member3) |
+| Member 4 | DevOps / CI | [github.com/eleem111](https://github.com/member4) |
+| Member 5 | Documentation & Testing | [biplopbista0-crypto](https://github.com/biplopbista0-crypto) |
 
 ## Demo / Live Preview
 
@@ -191,11 +191,10 @@ This project uses the following open‑source libraries:
 - `dotenv` – Environment variable management.
 - `helmet` – Security headers.
 
-Special thanks to the **MDN Web Docs**, **Stack Overflow**, and our course mentors for guidance.
 
 ## Contact / Support
 
-For questions, issues, or collaboration requests, please open an **[issue](https://github.com/pragyan11/securetms-fullstack-prototype/issues)** or contact the team via email at `securetms-capstone@example.com`.
+For questions, issues, or collaboration requests, please open an **[issue](https://github.com/pragyan11/securetms-fullstack-prototype/issues).
 
 ---
 
