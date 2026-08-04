@@ -55,8 +55,20 @@
 
           <p id="loginMsg" style="margin-top:14px;font-size:13px;color:var(--red-600);min-height:18px;" role="status" aria-live="polite"></p>
 
+          <p style="margin-top:10px;font-size:12px;color:var(--text-faint);line-height:1.5;">
+            First time on this device? Use <strong>“Set up passkey on this device”</strong> to attach a
+            Face ID / PIN passkey to your account — passkeys can only be used on the device where they were registered.
+          </p>
+
           <div style="margin-top:20px;display:flex;justify-content:space-between;align-items:center;">
             <button class="btn btn-ghost btn-sm" id="recoverBtn" type="button">Forgot your device?</button>
+            <button class="btn btn-ghost btn-sm" id="setupPasskeyBtn" type="button" style="color:var(--orange-600);">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:4px;">
+                <rect x="3" y="11" width="18" height="11" rx="2"/>
+                <path d="M7 11 V7 A5 5 0 0 1 17 7 V11"/>
+              </svg>
+              Set up passkey on this device
+            </button>
           </div>
         </form>
 

@@ -218,6 +218,37 @@
   }
 
   /**
+   * Enroll a NEW passkey on the current device for an EXISTING account.
+   *
+   * Why this exists: passkeys are cryptographically bound to the origin they
+   * were registered on. Accounts created on the local dev site (RP_ID
+   * localhost) can never be used to authenticate on the deployed site, and
+   * imported demo accounts have no passkey at all. This button lets the owner
+   * attach a fresh platform passkey (Windows Hello / Face ID / PIN) to an
+   * existing account directly from the login page, so login works with their
+   * device's biometrics instead of falling back to a USB security-key prompt.
+   *
+   * Reuses the registration ceremony endpoints (they operate on existing
+   * users too) and finishes by signing the user in, exactly like registerUser.
+   */
+  async function setupPasskey() {
+    if (!checkWebAuthnOrigin()) throw new Error('WebAuthn origin unsupported on this address');
+    const email = document.getElementById('loginEmail')?.value.trim();
+    if (!email) throw new Error('Enter your account email first');
+    const optsRes = await api('/api/auth/webauthn/register/options', 'POST', { email }, false);
+    if (optsRes.error) throw new Error(optsRes.message || 'Account not found — create one with Register first');
+    await ensureSimpleWebAuthnBrowser();
+    let att;
+    try { att = await SimpleWebAuthnBrowser.startRegistration(optsRes); }
+    catch (e) { throw new Error('Passkey setup failed: ' + e.message); }
+    const verify = await api('/api/auth/webauthn/register', 'POST', { email, attestationResponse: att }, false);
+    if (verify.error || !verify.verified) throw new Error(verify.message || 'Server verification failed');
+    if (verify.token) persistAuth(verify.token);
+    if (verify.user) authUser = verify.user;
+    return verify;
+  }
+
+  /**
    * Single source of truth for "after a successful login, where do I go?".
    * Falls back from server-supplied redirect → authUser.role → v.user.role.
    *
@@ -332,6 +363,7 @@
     document.getElementById('registerBtn')?.addEventListener('click', registerUser);
     document.getElementById('loginBtn')?.addEventListener('click', loginUser);
     document.getElementById('recoverBtn')?.addEventListener('click', recoverAccount);
+    document.getElementById('setupPasskeyBtn')?.addEventListener('click', setupPasskey);
   }
   onReady(wireGlobalButtons);
 
@@ -583,6 +615,7 @@
   window.recoverAccount = recoverAccount;
   window.registerPasskey = registerPasskey;
   window.loginPasskey = loginPasskey;
+  window.setupPasskey = setupPasskey;
   window.dashboardForRole = dashboardForRole;
   window.geocodeAddress = geocodeAddress;
   window.setupAddressAutocomplete = setupAddressAutocomplete;
