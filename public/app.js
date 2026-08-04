@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   SecureTMS — shared client helpers.
+   SpeedX — shared client helpers.
    Loaded by every page. Exposes window.requireAuth, window.api, window.authUser,
    window.loginUser, window.logoutUser, SimpleWebAuthn wrappers and toast helper.
    ═══════════════════════════════════════════════════════════════════════════ */

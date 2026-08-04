@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   SecureTMS — My account / passkey details page logic.
+   SpeedX — My account / passkey details page logic.
    Relies on app.js (window.api, window.requireAuth, window.authUser).
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {

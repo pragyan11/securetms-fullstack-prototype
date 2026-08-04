@@ -1,5 +1,5 @@
 /*════════════════════════════════════════════════════════════════════════════
-SecureTMS — World-Class Admin / Operations Console
+SpeedX — World-Class Admin / Operations Console
 Full CRUD: Create, Read, Update, Delete on every tab.
 Includes: search, sort, pagination, export CSV, analytics charts,
 maintenance tracking, notifications, quick actions, theme toggle,
@@ -19,7 +19,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
   var pageState = { bookings: 1, shipments: 1, fleet: 1 };
   var activeTab = 'overviewTab';
   var notifications = [];
-  var rowCache = { bookings: {}, shipments: {}, fleet: {} };
+  var rowCache = { bookings: {}, shipments: {}, fleet: {}, users: {} };
 
   function clearSkeleton(id) { var el = document.getElementById(id); if (el && el.querySelector) { var sk = el.querySelector('.skeleton'); if (sk) sk.remove(); } }
   function setTileError(id, m) { var el = document.getElementById(id); if (el) el.innerHTML = '<span class="pill is-error" title="' + esc(m||'Failed') + '">Failed</span>'; }
@@ -31,6 +31,53 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     var rb = document.querySelector('.user-chip-role');
     if (ne) ne.textContent = dn; if (ae) ae.textContent = initials(dn, 'A');
     if (rb && user && user.role) rb.textContent = user.role;
+    var ua = document.getElementById('upAvatar'); if (ua) ua.textContent = initials(dn, 'A');
+    var un = document.getElementById('upName'); if (un) un.textContent = dn;
+    var ur = document.getElementById('upRole'); if (ur && user && user.role) ur.textContent = user.role;
+    if (user && user.email) { var ue = document.getElementById('upEmail'); if (ue) ue.textContent = user.email; }
+  }
+
+  /* ── User details popover (hover / click the user chip) ────────── */
+  var _popoverBound = false;
+  function initUserPopover() {
+    if (_popoverBound) return;
+    _popoverBound = true;
+    var chip = document.getElementById('userChip'), pop = document.getElementById('userPopover');
+    if (!chip || !pop) return;
+    var openTimer = null, closeTimer = null;
+    function loadMe() {
+      if (pop.dataset.loaded === '1') return;
+      pop.dataset.loaded = '1';
+      window.api('/api/auth/me', 'GET', null, true).then(function (me) {
+        if (!me || me.error || !me.email) return;
+        var up = document.getElementById('upAvatar'); if (up) up.textContent = initials(me.name || me.email, 'A');
+        var un = document.getElementById('upName'); if (un) un.textContent = me.name || me.email;
+        var ur = document.getElementById('upRole'); if (ur) ur.textContent = me.role || '';
+        var ue = document.getElementById('upEmail'); if (ue) ue.textContent = me.email;
+        var ua = document.getElementById('upAuth'); if (ua) ua.textContent = me.authMethod || 'Passkey';
+        var upk = document.getElementById('upPasskeys'); if (upk) upk.textContent = (typeof me.credentialCount === 'number') ? String(me.credentialCount) : '—';
+        var us = document.getElementById('upSince');
+        if (us) us.textContent = me.createdAt ? FmtDateT(me.createdAt) : '—';
+      }).catch(function () {});
+    }
+    function open() { clearTimeout(closeTimer); loadMe(); pop.classList.add('is-open'); if (chip) chip.setAttribute('aria-expanded', 'true'); }
+    function close() { pop.classList.remove('is-open'); if (chip) chip.setAttribute('aria-expanded', 'false'); }
+    // Hover (mouse) and click (touch) both reveal the card
+    chip.addEventListener('mouseenter', function () { clearTimeout(closeTimer); openTimer = setTimeout(open, 120); });
+    chip.addEventListener('mouseleave', function () { clearTimeout(openTimer); closeTimer = setTimeout(close, 250); });
+    chip.addEventListener('click', function (e) {
+      // Let the account/sign-out links inside the chip work normally
+      if (e.target.closest && (e.target.closest('a') || e.target.closest('#logoutBtn'))) return;
+      e.preventDefault();
+      if (pop.classList.contains('is-open')) close(); else open();
+    });
+    pop.addEventListener('mouseenter', function () { clearTimeout(closeTimer); });
+    pop.addEventListener('mouseleave', function () { closeTimer = setTimeout(close, 250); });
+    var pl = document.getElementById('popoverLogoutBtn');
+    if (pl) pl.addEventListener('click', function () { if (typeof window.logoutUser === 'function') window.logoutUser(); });
+    document.addEventListener('click', function (e) {
+      if (pop.classList.contains('is-open') && !pop.contains(e.target) && !chip.contains(e.target)) close();
+    });
   }
 
   function initTheme() {
@@ -208,7 +255,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
       function(b){return '<span class="pill '+pillClass(b.status)+'">'+esc(b.status||'Pending')+'</span>';},
       function(b){return esc(b.serviceZone||'—');},
       function(b){return '<span class="font-mono" style="color:var(--text-muted);font-size:12px;">'+FmtDateT(b.createdAt)+'</span>';},
-      function(b){return '<div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" onclick="window.adminPage.editBooking(\''+b._id+'\')">✏️</button><button class="btn btn-ghost btn-sm" onclick="window.adminPage.deleteBooking(\''+b._id+'\')">🗑</button></div>';}
+      function(b){return '<div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-booking" data-id="'+b._id+'" title="Edit">✏️</button><button class="btn btn-ghost btn-sm" data-action="delete-booking" data-id="'+b._id+'" title="Delete">🗑</button></div>';}
     ], { empty: 'No bookings found.' });
     renderPagination('bookingsPagination', 'bookings', res.total||a.length, res.pages||1, loadBookings);
   }
@@ -245,6 +292,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
   function createBooking() {
     // Clear form
     document.getElementById('cbCustomer').value = '';
+    document.getElementById('cbCustomerEmail').value = '';
     document.getElementById('cbOrigin').value = '';
     document.getElementById('cbDestination').value = '';
     document.getElementById('cbZone').value = 'Central';
@@ -259,11 +307,13 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     if (!origin || !dest) { if (typeof window.notify === 'function') window.notify('Pickup and delivery addresses are required', { kind: 'warn' }); return; }
     var data = {
       customerName: document.getElementById('cbCustomer').value.trim(),
+      customerEmail: document.getElementById('cbCustomerEmail').value.trim(),
       origin: origin,
       destination: dest,
       serviceZone: document.getElementById('cbZone').value,
       priority: document.getElementById('cbPriority').value
     };
+    if (!data.customerEmail) { if (typeof window.notify === 'function') window.notify('Customer email is required so a confirmation can be sent', { kind: 'warn' }); return; }
     var res = await window.api('/api/bookings', 'POST', data, true);
     if (res && res.error) { if (typeof window.notify === 'function') window.notify(res.message, { kind: 'error' }); return; }
     document.getElementById('createBookingModal').style.display = 'none';
@@ -300,7 +350,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
       function(s){return esc(s.driverName||'—');},
       function(s){return '<span class="pill '+pillClass(s.status)+'">'+esc(s.status)+'</span>';},
       function(s){return esc(s.eta||'—');},
-      function(s){return '<div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" onclick="window.adminPage.editShipment(\''+s._id+'\')">✏️</button><button class="btn btn-ghost btn-sm" onclick="window.adminPage.deleteShipment(\''+s._id+'\')">🗑</button></div>';}
+      function(s){return '<div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-shipment" data-id="'+s._id+'" title="Edit">✏️</button><button class="btn btn-ghost btn-sm" data-action="delete-shipment" data-id="'+s._id+'" title="Delete">🗑</button></div>';}
     ], { empty: 'No shipments found.' });
     renderPagination('shipmentsPagination', 'shipments', res.total||a.length, res.pages||1, loadShipments);
   }
@@ -343,10 +393,12 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
   function createShipment() {
     // Clear form
     document.getElementById('csCustomer').value = '';
+    document.getElementById('csCustomerEmail').value = '';
     document.getElementById('csPickup').value = '';
     document.getElementById('csDelivery').value = '';
     document.getElementById('csVehicle').value = '';
     document.getElementById('csDriver').value = '';
+    document.getElementById('csDriverEmail').value = '';
     document.getElementById('csStatus').value = 'Created';
     document.getElementById('csEta').value = '';
     document.getElementById('createShipmentModal').style.display = '';
@@ -359,13 +411,16 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     if (!pickup || !delivery) { if (typeof window.notify === 'function') window.notify('Pickup and delivery addresses are required', { kind: 'warn' }); return; }
     var data = {
       customerName: document.getElementById('csCustomer').value.trim(),
+      customerEmail: document.getElementById('csCustomerEmail').value.trim(),
       pickupAddress: pickup,
       deliveryAddress: delivery,
       vehicleNumber: document.getElementById('csVehicle').value.trim(),
       driverName: document.getElementById('csDriver').value.trim(),
+      driverEmail: document.getElementById('csDriverEmail').value.trim(),
       status: document.getElementById('csStatus').value,
       eta: document.getElementById('csEta').value.trim()
     };
+    if (!data.customerEmail) { if (typeof window.notify === 'function') window.notify('Customer email is required so a confirmation can be sent', { kind: 'warn' }); return; }
     var res = await window.api('/api/shipments', 'POST', data, true);
     if (res && res.error) { if (typeof window.notify === 'function') window.notify(res.message, { kind: 'error' }); return; }
     document.getElementById('createShipmentModal').style.display = 'none';
@@ -402,7 +457,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
       function(f){return esc(f.location||'—');},
       function(f){return '<span class="pill '+pillClass(f.status)+'">'+esc(f.status)+'</span>';},
       function(f){return esc(f.serviceZone||'—');},
-      function(f){return '<div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" onclick="window.adminPage.editVehicle(\''+f._id+'\')">✏️</button><button class="btn btn-ghost btn-sm" onclick="window.adminPage.deleteVehicle(\''+f._id+'\')">🗑</button></div>';}
+      function(f){return '<div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-vehicle" data-id="'+f._id+'" title="Edit">✏️</button><button class="btn btn-ghost btn-sm" data-action="delete-vehicle" data-id="'+f._id+'" title="Delete">🗑</button></div>';}
     ], { empty: 'No vehicles found.' });
     renderPagination('fleetPagination', 'fleet', res.total||a.length, res.pages||1, loadFleet);
   }
@@ -485,7 +540,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
       function(m){return FmtDateT(m.scheduledDate);},
       function(m){return '<span class="pill '+(m.status==='Completed'?'is-delivered':m.status==='Overdue'?'is-cancelled':'is-pending')+'">'+esc(m.status)+'</span>';},
       function(m){return '$'+(m.cost||0).toFixed(2);},
-      function(m){return '<button class="btn btn-ghost btn-sm" onclick="window.adminPage.completeMaintenance(\''+m._id+'\')">✓</button>';}
+      function(m){return '<button class="btn btn-ghost btn-sm" data-action="complete-maintenance" data-id="'+m._id+'" title="Mark complete">✓</button>';}
     ], { empty: 'No maintenance records.' });
   }
 
@@ -575,14 +630,103 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     });
   }
 
-  /* ── Export CSV ────────────────────────────────────────────────── */
-  async function exportCSV(type) {
-    try{var m={bookings:'/api/bookings/export',shipments:'/api/shipments/export'};if(!m[type])return;var r=await fetch(m[type],{headers:{Authorization:'Bearer '+window.authToken},credentials:'include'});var blob=await r.blob();var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download=type+'.csv';a.click();URL.revokeObjectURL(url);if(typeof window.notify==='function')window.notify(type.charAt(0).toUpperCase()+type.slice(1)+' exported',{kind:'success'});}
-    catch(e){if(typeof window.notify==='function')window.notify('Export failed',{kind:'error'});}
+  /* ── Export CSV (asks for date range first) ──────────────────── */
+  var _pendingExportType = null;
+  function openExportModal(type, label) {
+    _pendingExportType = type;
+    var m = document.getElementById('exportModal');
+    var sub = document.getElementById('exportModalSub');
+    if (sub) sub.textContent = 'Choose the date range to export ' + (label || '') + '.';
+    // Default range: last 30 days → today
+    var to = new Date();
+    var from = new Date(); from.setDate(from.getDate() - 30);
+    var iso = function(d){ return d.toISOString().slice(0,10); };
+    var f = document.getElementById('exportFrom'); if (f) f.value = iso(from);
+    var t = document.getElementById('exportTo'); if (t) t.value = iso(to);
+    if (m) m.style.display = '';
+  }
+  function closeExportModal() { var m = document.getElementById('exportModal'); if (m) m.style.display = 'none'; }
+
+  async function doExport(type, from, to) {
+    var m = { bookings: '/api/bookings/export', shipments: '/api/shipments/export' };
+    if (!m[type]) return;
+    try {
+      var qs = '';
+      if (from) qs += (qs ? '&' : '?') + 'from=' + encodeURIComponent(from);
+      if (to)   qs += (qs ? '&' : '?') + 'to=' + encodeURIComponent(to);
+      var r = await fetch(m[type] + qs, { headers: { Authorization: 'Bearer ' + window.authToken }, credentials: 'include' });
+      if (!r.ok) { if (typeof window.notify === 'function') window.notify('Export failed (' + r.status + ')', { kind: 'error' }); return; }
+      var blob = await r.blob();
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = type + '_' + from + '_' + to + '.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      if (typeof window.notify === 'function') window.notify(type.charAt(0).toUpperCase() + type.slice(1) + ' exported', { kind: 'success' });
+    } catch (e) { if (typeof window.notify === 'function') window.notify('Export failed', { kind: 'error' }); }
+  }
+
+  function handleExportSubmit(e) {
+    e.preventDefault();
+    if (!_pendingExportType) { closeExportModal(); return; }
+    var from = (document.getElementById('exportFrom') || {}).value || '';
+    var to = (document.getElementById('exportTo') || {}).value || '';
+    if (!from || !to) { if (typeof window.notify === 'function') window.notify('Please pick both dates', { kind: 'warn' }); return; }
+    if (from > to) { if (typeof window.notify === 'function') window.notify('"From" must be before "To"', { kind: 'warn' }); return; }
+    closeExportModal();
+    doExport(_pendingExportType, from, to);
   }
 
   async function loadLogs() { var res=await window.api('/api/logs','GET',null,true).catch(function(){return[];}); var a=arr(res).slice(0,100); renderTableRows(document.getElementById('logsOutput'),a,[function(l){return'<span class="font-mono" style="color:var(--text-muted);font-size:12px;white-space:nowrap;">'+FmtDateT(l.createdAt)+'</span>';},function(l){return'<strong>'+esc(l.action)+'</strong>';},function(l){return esc(l.userEmail||'—');},function(l){return esc(l.details||'—');}],{empty:'No logs yet.'}); }
-  async function loadUsers() { var res=await window.api('/api/admin/users','GET',null,true).catch(function(){return[];}); var a=arr(res); renderTableRows(document.getElementById('usersOutput'),a,[function(u){return esc(u.name||'—');},function(u){return esc(u.email);},function(u){return'<span class="pill '+(u.role==='Admin'?'is-info':'is-other')+'">'+esc(u.role)+'</span>';},function(u){return'<span class="font-mono" style="color:var(--text-muted);font-size:12px;">'+FmtDateT(u.createdAt)+'</span>';}]); }
+  async function loadUsers() {
+    var res = await window.api('/api/admin/users', 'GET', null, true).catch(function(){ return []; });
+    var a = arr(res);
+    a.forEach(function(u){ rowCache.users[u._id] = u; });
+    renderTableRows(document.getElementById('usersOutput'), a, [
+      function(u){ return esc(u.name || '—'); },
+      function(u){ return esc(u.email); },
+      function(u){ return '<span class="pill '+(u.role==='Admin'?'is-info':'is-other')+'">'+esc(u.role)+'</span>'; },
+      function(u){ return '<span class="font-mono" style="color:var(--text-muted);font-size:12px;">'+FmtDateT(u.createdAt)+'</span>'; },
+      function(u){ var selfId = window.authUser && (window.authUser.id || window.authUser._id); if (selfId && String(u._id) === String(selfId)) return '<span class="pill is-other" style="font-size:11px;">You</span>'; return '<div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-user" data-id="'+u._id+'" title="Edit">✏️</button><button class="btn btn-ghost btn-sm" data-action="delete-user" data-id="'+u._id+'" title="Delete">🗑</button></div>'; }
+    ], { empty: 'No users yet.' });
+  }
+
+  function editUser(id) {
+    var u = rowCache.users[id];
+    if (!u) return;
+    document.getElementById('euId').value = id;
+    document.getElementById('euName').value = u.name || '';
+    document.getElementById('euEmail').value = u.email || '';
+    document.getElementById('euRole').value = u.role || 'Customer';
+    document.getElementById('editUserModal').style.display = '';
+  }
+
+  async function updateUser(e) {
+    e.preventDefault();
+    var id = document.getElementById('euId').value;
+    var data = {
+      name: document.getElementById('euName').value.trim(),
+      email: document.getElementById('euEmail').value.trim(),
+      role: document.getElementById('euRole').value
+    };
+    if (!data.name || !data.email) { if (typeof window.notify === 'function') window.notify('Name and email are required', { kind: 'warn' }); return; }
+    var res = await window.api('/api/admin/users/' + id, 'PUT', data, true);
+    if (res && res.error) { if (typeof window.notify === 'function') window.notify(res.message, { kind: 'error' }); return; }
+    document.getElementById('editUserModal').style.display = 'none';
+    if (typeof window.notify === 'function') window.notify('User updated', { kind: 'success' });
+    loadUsers();
+    loadKPIs();
+  }
+
+  async function deleteUser(id) {
+    if (!confirm('Delete this user? This cannot be undone.')) return;
+    var res = await window.api('/api/admin/users/' + id, 'DELETE', null, true);
+    if (res && res.error) { if (typeof window.notify === 'function') window.notify(res.message, { kind: 'error' }); return; }
+    if (typeof window.notify === 'function') window.notify('User deleted', { kind: 'success' });
+    loadUsers();
+    loadKPIs();
+  }
   async function loadInvites() { var res=await window.api('/api/admin/invites','GET',null,true).catch(function(){return[];}); var a=arr(res); var origin=window.location.origin; renderTableRows(document.getElementById('invitesOutput'),a,[function(i){return'<span class="font-mono" style="color:var(--text-muted);font-size:12px;white-space:nowrap;">'+FmtDateT(i.createdAt)+'</span>';},function(i){return'<span class="pill is-info">'+esc(i.role)+'</span>';},function(i){return esc(i.email||'<any>');},function(i){return'<span class="font-mono" style="color:var(--text-muted);font-size:12px;">'+FmtDateT(i.expiresAt)+'</span>';},function(i){return i.used?'<span class="pill is-other">Used</span>':'<span class="pill is-other">Open</span>';},function(i){return i.used?'<span style="color:var(--text-muted);font-size:12px;">'+esc(i.usedByEmail||'')+'</span>':'<input type="text" readonly value="'+origin+'/admin-onboard.html?token='+esc(i.token)+'" class="invite-url-input" style="font-family:var(--font-mono);font-size:11px;height:30px;width:380px;max-width:100%;" />';}],{empty:'No invites yet.'}); }
   async function createInvite() { var email=window.prompt('Optional: lock invite to a specific email.'); var res=await window.api('/api/admin/invites','POST',{email:email||undefined},true); if(res&&res.error){alert('Could not create invite: '+(res.message||'unknown'));return;} await loadInvites(); }
 
@@ -653,17 +797,34 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     main.addEventListener('click',h('quickNewShipmentBtn',function(){showTab('shipmentsTab');createShipment();}));
     main.addEventListener('click',h('quickAddVehicleBtn',function(){showTab('fleetTab');addVehicle();}));
 
-    // Invites
+    // Invites (button lives in the Overview tab only)
     main.addEventListener('click',h('newInviteBtn',createInvite));
-    main.addEventListener('click',h('newInviteBtn2',createInvite));
 
     // Maintenance
     main.addEventListener('click',h('addMaintenanceBtn',function(){populateMntVehicles();document.getElementById('maintenanceModal').style.display='';}));
 
-    // Export
-    main.addEventListener('click',h('exportBookingsBtn',function(){exportCSV('bookings');}));
-    main.addEventListener('click',h('exportShipmentsBtn',function(){exportCSV('shipments');}));
-    main.addEventListener('click',h('exportCurrentBtn',function(){if(activeTab==='bookingsTab')exportCSV('bookings');else if(activeTab==='shipmentsTab')exportCSV('shipments');}));
+    // Export (all open the date-range modal first)
+    main.addEventListener('click',h('exportBookingsBtn',function(){openExportModal('bookings','bookings');}));
+    main.addEventListener('click',h('exportShipmentsBtn',function(){openExportModal('shipments','shipments');}));
+    main.addEventListener('click',h('exportCurrentBtn',function(){if(activeTab==='bookingsTab')openExportModal('bookings','bookings');else if(activeTab==='shipmentsTab')openExportModal('shipments','shipments');else if(typeof window.notify==='function')window.notify('No CSV export for this tab',{kind:'warn'});}));
+
+    // Delegated action-column clicks (data-action buttons) — avoids inline onclick,
+    // which the Content-Security-Policy blocks (no 'unsafe-inline' in script-src).
+    main.addEventListener('click', function(e) {
+      var btn = e.target && e.target.closest && e.target.closest('button[data-action]');
+      if (!btn || !btn.dataset || !btn.dataset.action) return;
+      var id = btn.dataset.id;
+      var action = btn.dataset.action;
+      if (action === 'edit-booking') editBooking(id);
+      else if (action === 'delete-booking') deleteBooking(id);
+      else if (action === 'edit-shipment') editShipment(id);
+      else if (action === 'delete-shipment') deleteShipment(id);
+      else if (action === 'edit-vehicle') editVehicle(id);
+      else if (action === 'delete-vehicle') deleteVehicle(id);
+      else if (action === 'complete-maintenance') completeMaintenance(id);
+      else if (action === 'edit-user') editUser(id);
+      else if (action === 'delete-user') deleteUser(id);
+    });
 
     // Forms
     var avForm=document.getElementById('addVehicleForm');if(avForm&&avForm.dataset.bound!=='1'){avForm.dataset.bound='1';avForm.addEventListener('submit',handleAddVehicle);}
@@ -671,6 +832,8 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     var ebForm=document.getElementById('editBookingForm');if(ebForm&&ebForm.dataset.bound!=='1'){ebForm.dataset.bound='1';ebForm.addEventListener('submit',updateBooking);}
     var esForm=document.getElementById('editShipmentForm');if(esForm&&esForm.dataset.bound!=='1'){esForm.dataset.bound='1';esForm.addEventListener('submit',updateShipment);}
     var evForm=document.getElementById('editVehicleForm');if(evForm&&evForm.dataset.bound!=='1'){evForm.dataset.bound='1';evForm.addEventListener('submit',updateVehicle);}
+    var exForm=document.getElementById('exportForm');if(exForm&&exForm.dataset.bound!=='1'){exForm.dataset.bound='1';exForm.addEventListener('submit',handleExportSubmit);}
+    var euForm=document.getElementById('editUserForm');if(euForm&&euForm.dataset.bound!=='1'){euForm.dataset.bound='1';euForm.addEventListener('submit',updateUser);}
     var cbForm=document.getElementById('createBookingForm');if(cbForm&&cbForm.dataset.bound!=='1'){cbForm.dataset.bound='1';cbForm.addEventListener('submit',handleCreateBooking);}
     var csForm=document.getElementById('createShipmentForm');if(csForm&&csForm.dataset.bound!=='1'){csForm.dataset.bound='1';csForm.addEventListener('submit',handleCreateShipment);}
   }
@@ -702,7 +865,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     var disl=document.getElementById('dispatchNavLink');if(disl)disl.style.display='';
     var qa=document.getElementById('quickActions');if(qa)qa.style.display='flex';
     document.getElementById('headerSub').textContent='Full command center — bookings, shipments, fleet, analytics, and real-time monitoring.';
-    initTheme();initModalClosers();wireNavLinks();    wireQuickButtons();wireNotifPanel();
+    initTheme();initModalClosers();wireNavLinks();    wireQuickButtons();wireNotifPanel();initUserPopover();
     wireAddressAutocomplete();
     wireSearch('bookingsSearch','bookingsStatusFilter',loadBookings);
     wireSearch('shipmentsSearch','shipmentsStatusFilter',loadShipments);
@@ -713,5 +876,5 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     await refreshAll();setupRealtime();
   }
   window.onReady(bootAdminPage);
-  window.adminPage={refreshAll:refreshAll,loadInvites:loadInvites,createInvite:createInvite,deleteBooking:deleteBooking,deleteShipment:deleteShipment,deleteVehicle:deleteVehicle,editBooking:editBooking,editShipment:editShipment,editVehicle:editVehicle,completeMaintenance:completeMaintenance,loadBookings:loadBookings,loadShipments:loadShipments,loadFleet:loadFleet,loadMaintenance:loadMaintenance,loadLogs:loadLogs,loadUsers:loadUsers};
+  window.adminPage={refreshAll:refreshAll,loadInvites:loadInvites,createInvite:createInvite,deleteBooking:deleteBooking,deleteShipment:deleteShipment,deleteVehicle:deleteVehicle,editBooking:editBooking,editShipment:editShipment,editVehicle:editVehicle,completeMaintenance:completeMaintenance,loadBookings:loadBookings,loadShipments:loadShipments,loadFleet:loadFleet,loadMaintenance:loadMaintenance,loadLogs:loadLogs,loadUsers:loadUsers,editUser:editUser,deleteUser:deleteUser};
 })();

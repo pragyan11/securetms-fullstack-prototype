@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   SecureTMS — Global Design System (modern professional TMS)
+   SpeedX — Global Design System (modern professional TMS)
    Inspired by FedEx / Maersk / Uber Freight / Linear:
    • Light, calm, trustworthy base — never cyberpunk
    • Trustworthy navy primary + warm orange accent
@@ -179,7 +179,25 @@ p { margin: 0 0 8px 0; color: var(--text); }
   color: white;
 }
 .brand strong { font-weight: 700; }
-.brand .brand-tms { color: var(--orange-600); }
+.brand .brand-text {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  line-height: 1.15;
+}
+.brand .brand-tagline {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+/* Compact tagline so it fits the narrower sidebar lockup */
+.sidebar-brand .brand-tagline {
+  font-size: 7.5px;
+  letter-spacing: 0.05em;
+}
 
 /* ── Container helpers ──────────────────────────────────────────── */
 .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }

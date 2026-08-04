@@ -230,7 +230,7 @@ router.post('/dev-login', devLoginLimiter, async (req, res) => {
 });
 
 async function getOrCreateChallenge(email, type) {
-  const rpName = process.env.RP_NAME || 'SecureTMS';
+  const rpName = process.env.RP_NAME || 'SpeedX';
   const rpID = process.env.RP_ID;
   const origin = process.env.EXPECTED_ORIGIN;
 

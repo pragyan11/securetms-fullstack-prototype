@@ -1,4 +1,9 @@
 const dotenv = require('dotenv');
+// .env.local (real Gmail SMTP creds, per-machine overrides) takes precedence,
+// then .env fills in anything else. dotenv does not overwrite already-set vars,
+// so loading .env.local first keeps its values. Guarded so environments without
+// .env.local (CI, teammates, prod) boot without a dotenv warning.
+if (require('fs').existsSync('./.env.local')) dotenv.config({ path: './.env.local' });
 dotenv.config({ path: './.env' });
 
 const express = require('express');
@@ -8,7 +13,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
-const winston = require('winston');
+const logger = require('./lib/logger'); // Winston logger shared with services (lib/logger.js)
 
 const authRoutes = require('./routes/auth');
 const bookingRoutes = require('./routes/bookings');
@@ -45,18 +50,6 @@ app.use((req, res, next) => {
 // Make the skeleton-shipment helper available to route handlers.
 app.set('attachSkeletonShipment', attachSkeletonShipment);
 const { isDevMode } = require('./lib/devMode');
-// Winston logger configuration
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level.toUpperCase()}] ${message}`)
-  ),
-  transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: 'logs/error.log', level: 'error' })
-  ]
-});
 const PORT = Number(process.env.PORT) || 4000;
 const MONGO_URI = process.env.MONGO_URI;
 
@@ -141,11 +134,13 @@ app.use(express.static('public', {
   lastModified: true,
   cacheControl: 'no-cache, no-store, must-revalidate',
   setHeaders: (res, filePath) => {
-    // Long-lived caching only for genuine static assets (CSS, fonts,
-    // images, vendor JS under /libs/). HTML and JS bundles (the app shell
-    // and its modules) keep the strict no-store default above.
+    // Long-lived caching only for genuine static assets (fonts, images,
+    // vendor JS under /libs/). HTML, JS bundles and CSS keep the strict
+    // no-store default above so style/layout changes never linger in the
+    // browser cache during development (stale CSS is the #1 cause of
+    // 'I don't see the change' after editing stylesheets).
     const lower = String(filePath || '').toLowerCase();
-    if (!lower.endsWith('.html') && !lower.endsWith('.js')) {
+    if (!lower.endsWith('.html') && !lower.endsWith('.js') && !lower.endsWith('.css')) {
       res.setHeader('Cache-Control', 'public, max-age=3600');
     }
   }
@@ -176,7 +171,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'SecureTMS API' });
+  res.json({ status: 'ok', service: 'SpeedX API' });
 });
 
 async function seedDemoData() {

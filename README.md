@@ -1,14 +1,14 @@
-# SecureTMS Prototype
+# SpeedX Prototype
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 [![Node.js](https://img.shields.io/badge/Node-18%2B-green.svg)](https://nodejs.org/) 
 [![CI](https://github.com/pragyan11/securetms-fullstack-prototype/actions/workflows/ci.yml/badge.svg)](https://github.com/pragyan11/securetms-fullstack-prototype/actions/workflows/ci.yml)
 
-> **Secure Transport Management System (SecureTMS)** – a full‑stack prototype demonstrating passwordless authentication (FIDO2/WebAuthn) and a modern operations dashboard for logistics.
+> **Secure Transport Management System (SpeedX)** – a full‑stack prototype demonstrating passwordless authentication (FIDO2/WebAuthn) and a modern operations dashboard for logistics.
 
 ## About
 
-SecureTMS is a lightweight, full‑stack prototype that showcases passwordless authentication using WebAuthn/FIDO2 concepts, combined with a responsive logistics dashboard. It serves as a reference implementation for developers exploring modern authentication flows and basic transport management features.
+SpeedX is a lightweight, full‑stack prototype that showcases passwordless authentication using WebAuthn/FIDO2 concepts, combined with a responsive logistics dashboard. It serves as a reference implementation for developers exploring modern authentication flows and basic transport management features.
 
 ## Releases
 
@@ -154,7 +154,28 @@ This prototype is provided **as‑is** for educational purposes. See the `LICENS
 
 ## Demo / Live Preview
 
-A live demo of the application is hosted at **[https://securetms-demo.example.com](https://securetms-demo.example.com)** (replace with your actual URL). The demo showcases the full login flow, dashboard navigation, and basic CRUD operations.
+> 🚀 **Live demo coming soon** — the production URL will be linked here after deployment.
+
+The full-stack app is deployed to **[Render](https://render.com)** (free tier) with a **MongoDB Atlas** database. The link is also set as this repository's description on GitHub.
+
+### Deployment (one-click)
+
+This repo includes a `render.yaml` blueprint:
+
+1. Push this repo to GitHub.
+2. In [Render](https://render.com), choose **New → Blueprint** and select this repo.
+3. Set the required env vars in the Render dashboard (see `render.yaml`):
+   - `MONGO_URI` — your MongoDB Atlas connection string
+   - `JWT_SECRET` — a long random string
+   - `RP_ID` — `<service-name>.onrender.com` (no scheme)
+   - `EXPECTED_ORIGIN` / `FRONTEND_URL` — `https://<service-name>.onrender.com`
+4. Deploy. The health check at `/api/health` confirms the service is up.
+
+> **WebAuthn note:** `RP_ID` / `EXPECTED_ORIGIN` must match the deployed origin exactly or passkey login will fail — they are read from env vars, not hard-coded.
+
+### Demo accounts (production)
+
+Production starts with **zero seeded users** (dev seeding is gated off). To bootstrap an admin: `node scripts/seed-admin.js you@example.com`, then visit the printed invite URL. Customers and drivers register normally at `/register.html`.
 
 ## Screenshots
 <img width="1600" height="790" alt="image" src="https://github.com/user-attachments/assets/442ca620-9f24-464d-a155-0d331ac84b8e" />
@@ -180,6 +201,7 @@ A live demo of the application is hosted at **[https://securetms-demo.example.co
 - Write unit and integration tests with Jest.
 - Dockerize the application for easy deployment.
 - Deploy CI pipeline to run linting and tests on every PR.
+- Wire up real SMTP (Gmail app password) for production email delivery.
 
 ## Acknowledgements
 

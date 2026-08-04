@@ -45,17 +45,32 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Export CSV
+// Export CSV (optionally filtered by from/to date range)
 router.get('/export', async (req, res) => {
   try {
     const filter = req.user.role === 'Customer' ? { userId: req.user.id } : {};
+    const { from, to } = req.query;
+    const range = {};
+    if (from) {
+      const d = new Date(from + 'T00:00:00.000Z');
+      if (isNaN(d)) return res.status(400).json({ message: 'Invalid "from" date' });
+      range.$gte = d;
+    }
+    if (to) {
+      const d = new Date(to + 'T23:59:59.999Z');
+      if (isNaN(d)) return res.status(400).json({ message: 'Invalid "to" date' });
+      range.$lte = d;
+    }
+    if (from || to) filter.createdAt = range;
+
     const bookings = await Booking.find(filter).sort({ createdAt: -1 }).lean();
     const header = 'ID,Customer,Origin,Destination,Status,Zone,Created\n';
     const rows = bookings.map(b =>
       `"${b._id}","${b.customerName || ''}","${b.origin || ''}","${b.destination || ''}","${b.status || ''}","${b.serviceZone || ''}","${b.createdAt || ''}"`
     ).join('\n');
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=bookings.csv');
+    const rangeLabel = (from || to) ? `_${from || 'start'}_${to || 'now'}` : '';
+    res.setHeader('Content-Disposition', `attachment; filename=bookings${rangeLabel}.csv`);
     res.send(header + rows);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -81,6 +96,7 @@ router.post(
   '/',
   [
     body('customerName').optional().trim().escape(),
+    body('customerEmail').optional().isEmail().normalizeEmail(),
     body('origin').notEmpty().trim().escape(),
     body('destination').notEmpty().trim().escape(),
     body('status').optional().isIn(['Pending', 'Confirmed', 'Completed']),
@@ -91,10 +107,11 @@ router.post(
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
     try {
-      const { customerName, origin, destination, status, serviceZone, priority } = req.body;
+      const { customerName, customerEmail, origin, destination, status, serviceZone, priority } = req.body;
       const booking = await Booking.create({
         userId: req.user.id,
         customerName: customerName || req.user.name,
+        customerEmail: customerEmail || null,
         origin, destination,
         status: status || 'Pending',
         serviceZone: serviceZone || 'Central',
@@ -118,11 +135,12 @@ router.post(
         req.io.emit('activity:new', { action: 'BOOKING_CREATE', userEmail: req.user.email, details: `${origin} -> ${destination}`, createdAt: new Date() });
       }
 
-      // Send email notification
+      // Send confirmation email — to the customer the booking was created for
+      // (admin flow), falling back to the creator (customer self-service flow).
       try {
-        const customer = await User.findById(req.user.id);
-        if (customer && customer.email) {
-          emailService.notifyBookingCreated(booking, customer.email).catch(() => {});
+        const emailTarget = booking.customerEmail || req.user.email;
+        if (emailTarget) {
+          emailService.notifyBookingCreated(booking, emailTarget).catch(() => {});
         }
       } catch (_) { /* email is best-effort */ }
 

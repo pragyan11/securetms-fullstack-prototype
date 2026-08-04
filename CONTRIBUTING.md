@@ -1,4 +1,4 @@
-# Contributing to SecureTMS Prototype
+# Contributing to SpeedX Prototype
 
 We welcome contributions! Follow these steps to get started:
 
@@ -28,4 +28,4 @@ We welcome contributions! Follow these steps to get started:
 - Follow existing naming conventions.
 - Add or update documentation in the README when appropriate.
 
-Thank you for helping make SecureTMS better!
+Thank you for helping make SpeedX better!

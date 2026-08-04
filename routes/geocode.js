@@ -19,7 +19,7 @@ router.get('/search', geocodeLimiter, async (req, res) => {
 
     const response = await fetch(url.toString(), {
       headers: {
-        'User-Agent': 'SecureTMS/1.0 (contact: support@securetms.com)',
+        'User-Agent': 'SpeedX/1.0 (contact: support@speedx.com)',
         'Accept': 'application/json'
       }
     });

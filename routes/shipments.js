@@ -54,7 +54,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Export CSV
+// Export CSV (optionally filtered by from/to date range)
 router.get('/export', async (req, res) => {
   try {
     let filter = {};
@@ -64,13 +64,29 @@ router.get('/export', async (req, res) => {
     } else if (req.user.role === 'Driver') {
       filter.driverEmail = req.user.email;
     }
+    const { from, to } = req.query;
+    const range = {};
+    if (from) {
+      const d = new Date(from + 'T00:00:00.000Z');
+      if (isNaN(d)) return res.status(400).json({ message: 'Invalid "from" date' });
+      range.$gte = d;
+    }
+    if (to) {
+      const d = new Date(to + 'T23:59:59.999Z');
+      if (isNaN(d)) return res.status(400).json({ message: 'Invalid "to" date' });
+      range.$lte = d;
+    }
+    // Shipment model has no createdAt — updatedAt is the closest lifecycle timestamp
+    if (from || to) filter.updatedAt = range;
+
     const shipments = await Shipment.find(filter).sort({ updatedAt: -1 }).lean();
     const header = 'Tracking ID,Customer,Pickup,Delivery,Vehicle,Driver,Status,ETA,Location,Updated\n';
     const rows = shipments.map(s =>
       `"${s.trackingId}","${s.customerName || ''}","${s.pickupAddress || ''}","${s.deliveryAddress || ''}","${s.vehicleNumber || ''}","${s.driverName || ''}","${s.status}","${s.eta || ''}","${s.currentLocation || ''}","${s.updatedAt}"`
     ).join('\n');
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=shipments.csv');
+    const rangeLabel = (from || to) ? `_${from || 'start'}_${to || 'now'}` : '';
+    res.setHeader('Content-Disposition', `attachment; filename=shipments${rangeLabel}.csv`);
     res.send(header + rows);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -111,6 +127,7 @@ router.post(
     body('pickupAddress').optional().trim().escape(),
     body('deliveryAddress').optional().trim().escape(),
     body('customerName').optional().trim().escape(),
+    body('customerEmail').optional().isEmail().normalizeEmail(),
     body('status').optional().isIn(['Created', 'Picked Up', 'In Transit', 'Delivered', 'Cancelled']),
     body('currentLocation').optional().trim().escape(),
     body('eta').optional().trim().escape(),
@@ -126,7 +143,7 @@ router.post(
       const {
         trackingId, shipmentId, vehicleNumber, driverName, driverEmail,
         assignedDriverId, bookingId, customerId, pickupAddress, deliveryAddress,
-        customerName, status, currentLocation, eta, location, podSignature, podPhoto, podNotes
+        customerName, customerEmail, status, currentLocation, eta, location, podSignature, podPhoto, podNotes
       } = req.body;
 
       const shipment = await Shipment.create({
@@ -136,7 +153,7 @@ router.post(
         bookingId: bookingId && mongoose.isValidObjectId(bookingId) ? bookingId : undefined,
         customerId: customerId && mongoose.isValidObjectId(customerId) ? customerId : undefined,
         pickupAddress: pickupAddress || (location && !deliveryAddress ? location : undefined),
-        deliveryAddress, customerName,
+        deliveryAddress, customerName, customerEmail: customerEmail || null,
         status: status || 'Created',
         currentLocation: currentLocation || location || 'Awaiting pickup',
         eta: eta || 'Pending',
@@ -153,6 +170,16 @@ router.post(
         req.io.emit('shipment:created', shipment);
         req.io.emit('activity:new', { action: 'SHIPMENT_CREATE', userEmail: req.user.email, details: `Created shipment ${shipment.trackingId}`, createdAt: new Date() });
       }
+
+      // Send confirmation emails (best-effort): customer + assigned driver
+      try {
+        if (shipment.customerEmail) {
+          emailService.notifyShipmentCreated(shipment, shipment.customerEmail).catch(() => {});
+        }
+        if (shipment.driverEmail && shipment.driverEmail !== shipment.customerEmail) {
+          emailService.notifyDriverAssigned(shipment, shipment.driverEmail).catch(() => {});
+        }
+      } catch (_) { /* email is best-effort */ }
 
       res.status(201).json({ message: 'Shipment created', shipment });
     } catch (err) {

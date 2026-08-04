@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="SecureTMS — Customer view. Track parcels, book pickups, watch live routes." />
-  <title>SecureTMS — My deliveries</title>
+  <meta name="description" content="SpeedX — Customer view. Track parcels, book pickups, watch live routes." />
+  <title>SpeedX — My deliveries</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10' fill='none' stroke='%230F4C81' stroke-width='1.6'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -16,6 +16,8 @@
     body.dark { --bg-app:#0F172A; --bg-card:#1E293B; --bg-soft:#1E293B; --border-soft:#334155; --border:#334155; --border-strong:#475569; --text-hi:#F1F5F9; --text:#CBD5E1; --text-muted:#94A3B8; --text-soft:#94A3B8; --text-dim:#64748B; --navy-50:#1E3A5F; --amber-50:#3D2E1A; --green-50:#1A3D2E; --red-50:#3D1A1A; --blue-50:#1A2E4D; }
     body.dark .sidebar { background:#1E293B; } body.dark .main { background:#0F172A; }
     body.dark .card,.kpi { background:#1E293B; } body.dark input,select,textarea { background:#334155; border-color:#475569; color:#E2E8F0; }
+    /* In dark mode every KPI icon renders orange so the small glyphs stay clearly visible */
+    body.dark .kpi-icon, body.dark .kpi-icon.orange, body.dark .kpi-icon.green { background:var(--orange-50); color:var(--orange-600); }
     .status-stepper { display:flex; gap:0; margin:20px 0; position:relative; }
     .status-stepper .step { flex:1; text-align:center; position:relative; padding:0 4px; }
     .status-stepper .step::after { content:''; position:absolute; top:16px; left:50%; width:100%; height:3px; background:var(--border); z-index:0; }
@@ -44,7 +46,10 @@
     <aside class="sidebar" aria-label="Primary navigation">
       <a href="index.html" class="brand sidebar-brand">
         <span class="brand-mark"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10"/></svg></span>
-        <strong>Secure<span class="brand-tms">TMS</span></strong>
+        <span class="brand-text">
+          <strong>SpeedX</strong>
+          <span class="brand-tagline">Secure Transport Management System</span>
+        </span>
       </a>
       <div class="nav-section">
         <div class="nav-section-label">Customer</div>
@@ -101,7 +106,7 @@
 
         <div class="banner is-info" id="demoBanner" style="display:none;">
           <span class="banner-icon">i</span>
-          <div class="banner-body"><p class="banner-title">Welcome to your SecureTMS customer view.</p><p class="banner-text">Your deliveries appear below as soon as the operations team assigns a route.</p></div>
+          <div class="banner-body"><p class="banner-title">Welcome to your SpeedX customer view.</p><p class="banner-text">Your deliveries appear below as soon as the operations team assigns a route.</p></div>
         </div>
 
         <!-- Deliveries Tab -->
@@ -116,6 +121,7 @@
           <div class="card-header"><div><div class="card-title">Book a new pickup</div><div class="card-sub">A driver and vehicle will be assigned once your booking is confirmed.</div></div></div>
           <form id="bookingForm" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
             <div style="grid-column:1/-1;"><label for="bookingCustomer">Your name</label><input id="bookingCustomer" type="text" required /></div>
+            <div style="grid-column:1/-1;"><label for="bookingCustomerEmail">Your email <span style="color:var(--red-600);">*</span></label><input id="bookingCustomerEmail" type="email" placeholder="you@example.com" required /><small style="color:var(--text-muted);font-size:11px;">A confirmation email with the booking details is sent here.</small></div>
             <div><label for="bookingOrigin">Pickup address</label><input id="bookingOrigin" type="text" placeholder="e.g. 12 Bridge St, Sydney" autocomplete="off" required /></div>
             <div><label for="bookingDestination">Drop-off address</label><input id="bookingDestination" type="text" placeholder="e.g. 88 Market Ln, Melbourne" autocomplete="off" required /></div>
             <div><label for="bookingZone">Service zone</label><select id="bookingZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
@@ -149,13 +155,14 @@
         </div>
       </section>
 
-      <footer class="footer"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;"><span>© SecureTMS — Secured by FIDO2 / WebAuthn</span><span>Customer view</span></div></footer>
+      <footer class="footer"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;"><span>© SpeedX — Secured by FIDO2 / WebAuthn</span><span>Customer view</span></div></footer>
 
       <!-- Booking Modal -->
       <div id="bookingModal" class="modal-overlay" style="display:none;" aria-hidden="true">
         <div class="modal-card"><div class="modal-header"><div><div class="card-title">Book a new pickup</div></div><button class="btn btn-ghost btn-sm" id="closeBookingModal" type="button">Close</button></div>
           <form id="modalBookingForm" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;">
             <div style="grid-column:1/-1;"><label for="modalBookingCustomer">Your name</label><input id="modalBookingCustomer" type="text" required /></div>
+            <div style="grid-column:1/-1;"><label for="modalBookingCustomerEmail">Your email <span style="color:var(--red-600);">*</span></label><input id="modalBookingCustomerEmail" type="email" placeholder="you@example.com" required /><small style="color:var(--text-muted);font-size:11px;">A confirmation email with the booking details is sent here.</small></div>
             <div><label for="modalBookingOrigin">Pickup address</label><input id="modalBookingOrigin" type="text" placeholder="e.g. 12 Bridge St, Sydney" autocomplete="off" required /></div>
             <div><label for="modalBookingDestination">Drop-off address</label><input id="modalBookingDestination" type="text" placeholder="e.g. 88 Market Ln, Melbourne" autocomplete="off" required /></div>
             <div><label for="modalBookingZone">Service zone</label><select id="modalBookingZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
@@ -182,5 +189,7 @@
   <script src="app.js" defer></script>
   <script src="customer-page.js" defer></script>
   <script src="/libs/leaflet/leaflet.js" defer></script>
+  <script src="/socket.io/socket.io.js" defer></script>
+  <script src="live-track.js" defer></script>
 </body>
 </html>

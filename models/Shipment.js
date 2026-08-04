@@ -7,6 +7,7 @@ const ShipmentSchema = new mongoose.Schema({
   driverName: { type: String },
   assignedDriverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
   driverEmail: { type: String, index: true },
+  customerEmail: { type: String },
   pickupAddress: { type: String },
   deliveryAddress: { type: String },
   customerName: { type: String },

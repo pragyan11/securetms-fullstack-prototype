@@ -1,5 +1,5 @@
 /*════════════════════════════════════════════════════════════════════════════
-SecureTMS — World-Class Driver View
+SpeedX — World-Class Driver View
 Features: POD signature capture, photo upload, inspection checklist,
 messaging with dispatch, multi-stop route management, dark mode.
 ═══════════════════════════════════════════════════════════════════════════*/
@@ -280,12 +280,15 @@ messaging with dispatch, multi-stop route management, dark mode.
         e.preventDefault();
         const payload = {
           customerName: (document.getElementById('modalShipmentCustomer')?.value || '').trim(),
+          customerEmail: (document.getElementById('modalShipmentCustomerEmail')?.value || '').trim(),
           pickupAddress: (document.getElementById('modalShipmentPickup')?.value || '').trim(),
           deliveryAddress: (document.getElementById('modalShipmentDelivery')?.value || '').trim(),
           vehicleNumber: (document.getElementById('modalShipmentVehicle')?.value || '').trim(),
+          driverEmail: (document.getElementById('modalShipmentDriverEmail')?.value || '').trim(),
           status: document.getElementById('modalShipmentStatus')?.value || 'Created',
         };
         if (!payload.pickupAddress || !payload.deliveryAddress) { if (modalMsg) { modalMsg.style.color = 'var(--red-600)'; modalMsg.textContent = 'Pickup and delivery addresses required.'; } return; }
+        if (!payload.customerEmail) { if (modalMsg) { modalMsg.style.color = 'var(--red-600)'; modalMsg.textContent = 'Customer email is required so a confirmation can be sent.'; } return; }
         modalMsg.style.color = 'var(--text-muted)'; modalMsg.textContent = 'Creating…';
         const res = await window.api('/api/shipments', 'POST', payload, true);
         if (res && res.error) { modalMsg.style.color = 'var(--red-600)'; modalMsg.textContent = res.message || 'Could not create.'; if (typeof window.notify === 'function') window.notify(res.message, { kind: 'error' }); return; }
@@ -313,26 +316,50 @@ messaging with dispatch, multi-stop route management, dark mode.
     }
   }
 
-  /* ── Map ───────────────────────────────────────────────────────── */
-  let driverMap = null, driverLayers = [];
+  /* ── Map (Uber / DoorDash style live tracking) ─────────────────── */
+  let driverTrack = null, driverSocket = null;
+  let driverRoutesDrawn = false;
+  async function locate(text) {
+    if (!text || text.length < 3) return null;
+    try { const r = await fetch('/api/geocode/search?q='+encodeURIComponent(text)+'&limit=1'); const j = await r.json(); if (j && j.length) return [parseFloat(j[0].lat), parseFloat(j[0].lon)]; } catch (_e) {}
+    return null;
+  }
   async function initDriverMap() {
     const container = document.getElementById('driverMap');
     if (!container) return;
     if (typeof window.L === 'undefined') { container.innerHTML = empty({ title: 'Map failed to load' }); return; }
-    if (!driverMap) { driverMap = window.L.map('driverMap').setView([0,0],2); window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(driverMap); }
-    else driverMap.invalidateSize();
-    driverLayers.forEach(l => driverMap.removeLayer(l)); driverLayers = [];
+    if (!driverTrack) driverTrack = window.LiveTrack.create('driverMap');
+    else driverTrack.map.invalidateSize();
 
     const res = await window.api('/api/shipments','GET',null,true).catch(() => ({data:[]}));
     const arr = Array.isArray(res) ? res : (res.data) || [];
-    async function locate(text) { if (!text||text.length<3) return null; try { const r = await fetch('/api/geocode/search?q='+encodeURIComponent(text)+'&limit=1'); const j=await r.json(); if (j&&j.length) return [parseFloat(j[0].lat),parseFloat(j[0].lon)]; } catch(_e){} return null; }
-    const pts = [];
-    for (const s of arr) {
-      const a = await locate(s.pickupAddress); const b = await locate(s.deliveryAddress);
-      if (a) { const m = window.L.circleMarker(a,{radius:8,color:'#FF6B35',fillColor:'#FF6B35',fillOpacity:0.9}).addTo(driverMap); m.bindPopup('<strong>Pickup</strong><br>'+esc(s.pickupAddress||'')); driverLayers.push(m); pts.push(a); }
-      if (b) { const color = s.status==='Delivered'?'#10B981':'#0F4C81'; const m = window.L.circleMarker(b,{radius:8,color,fillColor:color,fillOpacity:0.9}).addTo(driverMap); m.bindPopup('<strong>Drop-off</strong><br>'+esc(s.deliveryAddress||'')+'<br><em>'+esc(s.status||'')+'</em>'); driverLayers.push(m); pts.push(b); if (a) driverLayers.push(window.L.polyline([a,b],{color:'#0F4C81',weight:2.5,opacity:0.7,dashArray:'4 6'}).addTo(driverMap)); }
+
+    if (!driverRoutesDrawn) {
+      driverRoutesDrawn = true;
+      for (const s of arr) {
+        const a = await locate(s.pickupAddress); const b = await locate(s.deliveryAddress);
+        if (!a || !b) continue;
+        driverTrack.addRoute({
+          id: String(s._id),
+          trackingId: s.trackingId,
+          from: a,
+          to: b,
+          originLabel: s.pickupAddress,
+          destLabel: s.deliveryAddress,
+          vehicleNumber: s.vehicleNumber,
+          status: s.status || 'Created'
+        });
+      }
+      if (!arr.length) driverTrack.map.setView([-28.0, 140.0], 4);
     }
-    if (pts.length) driverMap.fitBounds(window.L.latLngBounds(pts).pad(0.2)); else driverMap.setView([20,0],2);
+
+    // Live socket: animate the vehicle for every assigned shipment
+    if (typeof window.io === 'function' && !driverSocket) {
+      try {
+        driverSocket = window.io({ withCredentials: true, transports: ['websocket', 'polling'] });
+        driverTrack.bindSocket(driverSocket);
+      } catch (_e) {}
+    }
   }
 
   /* ── Expose for HTML onclick ──────────────────────────────────── */

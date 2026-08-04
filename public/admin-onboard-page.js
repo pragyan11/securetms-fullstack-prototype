@@ -1,5 +1,5 @@
 /*════════════════════════════════════════════════════════════════════════════
-SecureTMS — Admin invite landing page (?token=...).
+SpeedX — Admin invite landing page (?token=...).
 Owns: invite-token validation, form prefill, admin registration + passkey
 enrolment. Depends on app.js (api, registerPasskey).
 ═══════════════════════════════════════════════════════════════════════════*/

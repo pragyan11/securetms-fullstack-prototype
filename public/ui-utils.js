@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   SecureTMS — shared UI formatters + DOM helpers.
+   SpeedX — shared UI formatters + DOM helpers.
    Loaded by customer/driver/dashboard pages. Pure functions, no globals
    besides window.SecureTMS.
    ═══════════════════════════════════════════════════════════════════════════ */

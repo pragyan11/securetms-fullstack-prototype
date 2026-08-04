@@ -63,27 +63,97 @@ router.get('/users/:id', async (req, res) => {
 
 const VALID_ROLES = ['Admin', 'Customer', 'Driver'];
 
-// Update a user's role (admin only in production)
+// Update a user's profile (name / email / role) — admin only
 router.put('/users/:id', async (req, res) => {
   try {
-    const { role } = req.body;
-    if (!role || !VALID_ROLES.includes(role)) {
-      return res.status(400).json({ message: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` });
+    const { name, email, role } = req.body;
+    const updates = {};
+
+    if (name !== undefined) {
+      if (typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ message: 'Name is required' });
+      }
+      updates.name = name.trim();
     }
-    const updated = await User.findByIdAndUpdate(req.params.id, { role }, { new: true });
-    if (!updated) return res.status(404).json({ message: 'User not found' });
-    res.json(updated);
+    if (email !== undefined) {
+      if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        return res.status(400).json({ message: 'A valid email is required' });
+      }
+      const cleanEmail = email.trim().toLowerCase();
+      const clash = await User.findOne({ email: cleanEmail, _id: { $ne: req.params.id } });
+      if (clash) return res.status(400).json({ message: 'That email is already in use' });
+      updates.email = cleanEmail;
+    }
+    if (role !== undefined) {
+      if (!VALID_ROLES.includes(role)) {
+        return res.status(400).json({ message: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` });
+      }
+      updates.role = role;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: 'Nothing to update' });
+    }
+
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ message: 'User not found' });
+
+    // Safety: don't let an admin demote or rename the last remaining admin,
+    // and don't let an admin demote their own account (locks the console).
+    if (updates.role && updates.role !== 'Admin' && target.role === 'Admin') {
+      if (String(target._id) === String(req.user.id)) {
+        return res.status(400).json({ message: 'You cannot change your own role' });
+      }
+      const adminCount = await User.countDocuments({ role: 'Admin' });
+      if (adminCount <= 1) {
+        return res.status(400).json({ message: 'Cannot demote the last admin' });
+      }
+    }
+
+    Object.assign(target, updates);
+    await target.save();
+
+    await AuditLog.create({
+      userEmail: req.user.email,
+      action: 'USER_UPDATE',
+      details: `Updated user ${target.email} (role: ${target.role})`,
+      ipAddress: req.ip
+    });
+
+    res.json(target);
   } catch (err) {
+    if (err && err.code === 11000) return res.status(400).json({ message: 'That email is already in use' });
     res.status(500).json({ message: err.message });
   }
 });
 
-// Delete a user
+// Delete a user — admin only
 router.delete('/users/:id', async (req, res) => {
   try {
-    const deleted = await User.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ message: 'User not found' });
-    res.json({ message: 'User deleted' });
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ message: 'User not found' });
+
+    // Safety: never allow self-deletion, and never delete the last admin.
+    if (String(target._id) === String(req.user.id)) {
+      return res.status(400).json({ message: 'You cannot delete your own account' });
+    }
+    if (target.role === 'Admin') {
+      const adminCount = await User.countDocuments({ role: 'Admin' });
+      if (adminCount <= 1) {
+        return res.status(400).json({ message: 'Cannot delete the last admin' });
+      }
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    await AuditLog.create({
+      userEmail: req.user.email,
+      action: 'USER_DELETE',
+      details: `Deleted user ${target.email} (role: ${target.role})`,
+      ipAddress: req.ip
+    });
+
+    res.json({ message: 'User deleted', deleted: { id: target._id, email: target.email } });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

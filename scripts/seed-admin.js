@@ -14,6 +14,11 @@
  * hex (64 chars) — unguessable.
  */
 
+// .env.local takes precedence (per-machine overrides e.g. real SMTP), then .env.
+// Guarded so environments without .env.local boot without a dotenv warning.
+if (require('fs').existsSync(require('path').join(__dirname, '..', '.env.local'))) {
+  require('dotenv').config({ path: require('path').join(__dirname, '..', '.env.local') });
+}
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const mongoose = require('mongoose');
 const path = require('path');

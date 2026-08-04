@@ -1,0 +1,35 @@
+# Render Blueprint — one-click deploy for SpeedX
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Deploy: create a new Blueprint in Render, select this repo, and set the
+# env vars (marked "sync: false") in the Render dashboard after creation.
+
+services:
+  - type: web
+    name: speedx-tms
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false            # set to your MongoDB Atlas connection string
+      - key: JWT_SECRET
+        sync: false            # set to a long random string
+      - key: RP_ID
+        sync: false            # set to <service-name>.onrender.com (no scheme)
+      - key: RP_NAME
+        value: SpeedX
+      - key: EXPECTED_ORIGIN
+        sync: false            # set to https://<service-name>.onrender.com
+      - key: FRONTEND_URL
+        sync: false            # set to https://<service-name>.onrender.com
+      - key: SESSION_EXPIRES_IN
+        value: 8h
+      - key: ALLOW_DEV_LOGIN
+        value: "0"             # never enable dev login in production
+      - key: PORT
+        value: 10000           # Render injects PORT; keep the app's default fallback

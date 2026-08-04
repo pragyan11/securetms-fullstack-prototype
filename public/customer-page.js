@@ -1,5 +1,5 @@
 /*════════════════════════════════════════════════════════════════════════════
-SecureTMS — World-Class Customer View
+SpeedX — World-Class Customer View
 Features: status stepper, ETA countdown, share tracking link, star rating,
 in-app messaging, dark mode, live map, 30s auto-refresh.
 ═══════════════════════════════════════════════════════════════════════════*/
@@ -291,6 +291,7 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
         e.preventDefault();
         const payload = {
           customerName: (document.getElementById('bookingCustomer')?.value || '').trim(),
+          customerEmail: (document.getElementById('bookingCustomerEmail')?.value || '').trim(),
           origin: (document.getElementById('bookingOrigin')?.value || '').trim(),
           destination: (document.getElementById('bookingDestination')?.value || '').trim(),
           serviceZone: document.getElementById('bookingZone')?.value || 'Central',
@@ -298,6 +299,7 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
           notes: document.getElementById('bookingNotes')?.value || ''
         };
         if (!payload.origin || !payload.destination) { bookingMsg.style.color = 'var(--red-600)'; bookingMsg.textContent = 'Pickup and drop-off addresses are required.'; return; }
+        if (!payload.customerEmail) { bookingMsg.style.color = 'var(--red-600)'; bookingMsg.textContent = 'Email is required so we can send your confirmation.'; return; }
         await submitBooking(payload, bookingMsg, bookingForm);
       });
     }
@@ -308,12 +310,14 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
         e.preventDefault();
         const payload = {
           customerName: (document.getElementById('modalBookingCustomer')?.value || '').trim(),
+          customerEmail: (document.getElementById('modalBookingCustomerEmail')?.value || '').trim(),
           origin: (document.getElementById('modalBookingOrigin')?.value || '').trim(),
           destination: (document.getElementById('modalBookingDestination')?.value || '').trim(),
           serviceZone: document.getElementById('modalBookingZone')?.value || 'Central',
           priority: document.getElementById('modalBookingPriority')?.value || 'Standard'
         };
         if (!payload.origin || !payload.destination) { modalMsg.style.color = 'var(--red-600)'; modalMsg.textContent = 'Pickup and drop-off addresses are required.'; return; }
+        if (!payload.customerEmail) { modalMsg.style.color = 'var(--red-600)'; modalMsg.textContent = 'Email is required so we can send your confirmation.'; return; }
         await submitBooking(payload, modalMsg, modalForm);
       });
     }
@@ -324,12 +328,16 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
     const nameEl = document.getElementById('userName');
     const avatarEl = document.getElementById('userAvatar');
     const ci = document.getElementById('bookingCustomer');
+    const ce = document.getElementById('bookingCustomerEmail');
+    const mce = document.getElementById('modalBookingCustomerEmail');
     const roleBadge = document.querySelector('.user-chip-role');
     const greeting = document.getElementById('pageGreeting');
     if (nameEl) nameEl.textContent = dn;
     if (avatarEl) avatarEl.textContent = initials(dn, 'CU');
     if (roleBadge && user && user.role) roleBadge.textContent = user.role;
     if (ci) ci.value = (user && user.name) || '';
+    if (ce) ce.value = (user && user.email) || '';
+    if (mce) mce.value = (user && user.email) || '';
     if (greeting) {
       const hr = new Date().getHours();
       const slot = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
@@ -338,29 +346,58 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
     }
   }
 
-  /* ── Map ────────────────────────────────────────────────────────── */
-  let customerMap = null, customerLayers = [];
+  /* ── Map (Uber / DoorDash style live tracking) ─────────────────── */
+  let customerTrack = null, customerSocket = null;
+  let customerRoutesDrawn = false;
+  async function locate(text) {
+    if (!text || text.length < 3) return null;
+    try { const r = await fetch('/api/geocode/search?q='+encodeURIComponent(text)+'&limit=1'); const j = await r.json(); if (j && j.length) return [parseFloat(j[0].lat), parseFloat(j[0].lon)]; } catch (_e) {}
+    return null;
+  }
   async function initCustomerMap() {
     const container = document.getElementById('customerMap');
     if (!container) return;
     if (typeof window.L === 'undefined') { container.innerHTML = empty({ title: 'Map failed to load', message: 'Check your network.' }); return; }
-    if (!customerMap) { customerMap = window.L.map('customerMap').setView([0,0],2); window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(customerMap); }
-    else customerMap.invalidateSize();
-    customerLayers.forEach(l => customerMap.removeLayer(l)); customerLayers = [];
+    if (!customerTrack) customerTrack = window.LiveTrack.create('customerMap');
+    else customerTrack.map.invalidateSize();
 
     const [bData, sData] = await Promise.all([
       window.api('/api/bookings','GET',null,true).catch(()=>({data:[]})),
       window.api('/api/shipments','GET',null,true).catch(()=>({data:[]}))
     ]);
     const bArr = Array.isArray(bData) ? bData : (bData.data) || [];
-    async function locate(text) { if (!text || text.length < 3) return null; try { const r = await fetch('/api/geocode/search?q='+encodeURIComponent(text)+'&limit=1'); const j = await r.json(); if (j && j.length) return [parseFloat(j[0].lat), parseFloat(j[0].lon)]; } catch (_e) {} return null; }
-    const pts = [];
-    for (const b of bArr) {
-      const o = await locate(b.origin); const d = await locate(b.destination);
-      if (o) { const m = window.L.circleMarker(o,{radius:8,color:'#FF6B35',fillColor:'#FF6B35',fillOpacity:0.9}).addTo(customerMap); m.bindPopup('<strong>Pickup:</strong> '+esc(b.origin)); customerLayers.push(m); pts.push(o); }
-      if (d) { const m = window.L.circleMarker(d,{radius:8,color:'#0F4C81',fillColor:'#0F4C81',fillOpacity:0.9}).addTo(customerMap); m.bindPopup('<strong>Drop-off:</strong> '+esc(b.destination)); customerLayers.push(m); pts.push(d); if (o) customerLayers.push(window.L.polyline([o,d],{color:'#0F4C81',weight:2,opacity:0.6,dashArray:'4 6'}).addTo(customerMap)); }
+    const sArr = Array.isArray(sData) ? sData : (sData.data) || [];
+    const byBooking = new Map();
+    sArr.forEach(s => { if (s && s.bookingId) byBooking.set(String(s.bookingId), s); });
+
+    if (!customerRoutesDrawn) {
+      customerRoutesDrawn = true;
+      for (const b of bArr) {
+        const sh = byBooking.get(String(b._id));
+        const o = await locate(b.origin); const d = await locate(b.destination);
+        if (!o || !d) continue;
+        customerTrack.addRoute({
+          id: String(b._id),
+          trackingId: sh && sh.trackingId,
+          from: o,
+          to: d,
+          originLabel: b.origin,
+          destLabel: b.destination,
+          vehicleNumber: sh && sh.vehicleNumber,
+          status: (sh && sh.status) || 'Awaiting assignment'
+        });
+      }
+      if (!bArr.length) customerTrack.map.setView([-28.0, 140.0], 4);
     }
-    if (pts.length) customerMap.fitBounds(window.L.latLngBounds(pts).pad(0.2)); else customerMap.setView([20,0],2);
+
+    // Live socket: animate the actual vehicle carrying this customer's parcel
+    if (typeof window.io === 'function' && !customerSocket) {
+      try {
+        customerSocket = window.io({ withCredentials: true, transports: ['websocket', 'polling'] });
+        customerTrack.bindSocket(customerSocket);
+        customerSocket.on('disconnect', () => {});
+      } catch (_e) {}
+    }
   }
 
   /* ── Address Autocomplete ──────────────────────────────────────── */

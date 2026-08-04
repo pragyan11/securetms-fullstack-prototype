@@ -1,5 +1,5 @@
 /*════════════════════════════════════════════════════════════════════════════
-SecureTMS — DEPRECATED / NO-OP STUB.
+SpeedX — DEPRECATED / NO-OP STUB.
 
 This file used to drive the cyber-physical dashboard choreography (palette,
 bento mirroring, avatar menu, GSAP timeline, dot-matrix fleet grid, etc.) and

@@ -1,12 +1,12 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   SecureTMS — Live GPS Simulation
+   SpeedX — Live GPS Simulation
    Periodically updates vehicle and shipment locations, emitting socket.io
    events so maps on all dashboards animate markers in real time.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const Vehicle = require('../models/Vehicle');
 const Shipment = require('../models/Shipment');
-const logger = require('winston');
+const logger = require('../lib/logger');
 
 // Simulated GPS waypoints for each vehicle (lat, lng, label)
 const SIMULATED_ROUTES = {

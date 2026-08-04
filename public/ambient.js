@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════
-   SecureTMS — Ambient Effects (canvas particle field + reduced-motion)
+   SpeedX — Ambient Effects (canvas particle field + reduced-motion)
    Loaded by every page that wants the cyber-logistics "living system" feel.
    - 60-90 drifting dots, slow oceanic drift
    - Hairline strokes connect neighbors within range

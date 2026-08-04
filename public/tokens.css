@@ -1,0 +1,105 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   SpeedX — Landing Design Tokens (Hallmark · theme: Hum)
+   Cream paper · pear-yellow primary · sky-cyan secondary · coral pop.
+   Rounded sans (Plus Jakarta Sans) + mono labels (JetBrains Mono).
+   Every colour / font / space / ease below is referenced by var(--name).
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── Surfaces ─────────────────────────────────────────────── */
+  --color-paper:    oklch(97% 0.012 95);
+  --color-paper-2:  oklch(94% 0.016 95);
+  --color-paper-3:  oklch(91% 0.020 95);
+
+  /* ── Ink (cool navy tilt — carries the SpeedX brand navy) ─ */
+  --color-ink:      oklch(20% 0.012 250);
+  --color-ink-2:    oklch(32% 0.014 250);
+  --color-ink-3:    oklch(46% 0.012 250);
+  --color-muted:    oklch(45% 0.014 250);
+
+  /* ── Rules ────────────────────────────────────────────────── */
+  --color-rule:     oklch(85% 0.015 95);
+  --color-rule-2:   oklch(78% 0.018 95);
+
+  /* ── Accents (multi-accent — each owns its own surface) ───── */
+  --color-accent:       oklch(86% 0.18 95);   /* pear — primary CTA, character */
+  --color-accent-deep:  oklch(77% 0.17 95);   /* pear button edge */
+  --color-accent-2:     oklch(66% 0.18 235);  /* sky-cyan — links, map, fleet */
+  --color-accent-2-deep:oklch(57% 0.16 235);
+  --color-accent-3:     oklch(68% 0.24 18);   /* coral — single high-energy moment */
+  --color-accent-3-deep:oklch(59% 0.21 18);
+  --color-mint:         oklch(80% 0.16 150);  /* success / delivered */
+  --color-lavender:     oklch(74% 0.16 305);  /* pending / tags */
+
+  /* Text on accent fills (contrast-safe, never raw white) */
+  --color-accent-ink:    oklch(22% 0.03 95);
+  --color-accent-2-ink:  oklch(22% 0.03 235);
+  --color-accent-3-ink:  oklch(24% 0.04 25);
+  --color-mint-ink:      oklch(28% 0.04 150);
+  --color-lavender-ink:  oklch(30% 0.05 305);
+
+  --color-focus:    oklch(55% 0.19 250);
+
+  /* ── Type ─────────────────────────────────────────────────── */
+  --font-display: "Plus Jakarta Sans", ui-rounded, system-ui, sans-serif;
+  --font-body:    "Plus Jakarta Sans", ui-rounded, system-ui, sans-serif;
+  --font-label:   "JetBrains Mono", ui-monospace, monospace;
+
+  --text-xs:   0.64rem;
+  --text-sm:   0.8rem;
+  --text-base: 1rem;
+  --text-md:   1.25rem;
+  --text-lg:   1.5625rem;
+  --text-xl:   1.9531rem;
+  --text-2xl:  2.4414rem;
+  --text-3xl:  3.0518rem;
+  --text-display: clamp(2.5rem, 4.5vw + 1rem, 4.4rem);
+  --text-display-s: clamp(1.9rem, 3.2vw + 0.75rem, 3rem);
+
+  /* ── Space (4-pt scale) ───────────────────────────────────── */
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs:  0.5rem;
+  --space-sm:  0.75rem;
+  --space-md:  1rem;
+  --space-lg:  1.5rem;
+  --space-xl:  2.5rem;
+  --space-2xl: 4rem;
+  --space-3xl: 6rem;
+  --space-4xl: 9rem;
+
+  /* ── Radii ────────────────────────────────────────────────── */
+  --radius-sm:    8px;
+  --radius-input: 12px;
+  --radius-card:  20px;
+  --radius-pill:  999px;
+
+  /* ── Elevation (layered: tight contact + soft ambient) ────── */
+  --shadow-card: 0 12px 32px -16px oklch(20% 0.012 250 / 0.14);
+  --shadow-card-hover: 0 22px 44px -18px oklch(20% 0.012 250 / 0.20);
+  --shadow-pop: 0 18px 44px -16px oklch(20% 0.012 250 / 0.22);
+
+  /* ── Motion ───────────────────────────────────────────────── */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:     cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-snap:   cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-press:  cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long:  420ms;
+
+  /* ── Z-scale (named levels) ───────────────────────────────── */
+  --z-base:     1;
+  --z-raised:   10;
+  --z-dropdown: 100;
+  --z-sticky:   200;
+  --z-modal:    400;
+  --z-toast:    500;
+  --z-tooltip:  600;
+
+  /* ── Page shell ───────────────────────────────────────────── */
+  --shell: 1160px;
+  --page-gutter: clamp(1.25rem, 4vw, 2.5rem);
+}

@@ -1,5 +1,5 @@
 /*════════════════════════════════════════════════════════════════════════════
-SecureTMS — registration page script.
+SpeedX — registration page script.
 Owns: the bulletproof segmented role selector on register.html, feeding both
 the visible CSS highlight and the hidden <input name="role"> that gets POSTed
 to the server.

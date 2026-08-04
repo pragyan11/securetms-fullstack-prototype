@@ -1,11 +1,11 @@
-# SecureTMS – Secure Transport Management System
+# SpeedX – Secure Transport Management System
 ## Complete Project Documentation
 
 ---
 
 ## Executive Summary
 
-**SecureTMS** is a professional-grade, full-stack web application for managing transport and logistics operations. It provides a unified control center for booking management, fleet tracking, shipment coordination, and secure audit logging—all backed by modern passwordless authentication and a responsive, professional user interface.
+**SpeedX** is a professional-grade, full-stack web application for managing transport and logistics operations. It provides a unified control center for booking management, fleet tracking, shipment coordination, and secure audit logging—all backed by modern passwordless authentication and a responsive, professional user interface.
 
 The project demonstrates real-world skills in:
 - **Backend Development**: Express.js API design, MongoDB database modeling, middleware architecture
@@ -519,7 +519,7 @@ By completing this project, you have demonstrated:
 
 ## Conclusion
 
-**SecureTMS** is a production-quality full-stack application demonstrating modern web development practices. It showcases:
+**SpeedX** is a production-quality full-stack application demonstrating modern web development practices. It showcases:
 
 - Professional code organization
 - Security best practices
