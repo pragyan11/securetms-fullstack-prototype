@@ -662,19 +662,97 @@ input::placeholder, textarea::placeholder { color: var(--text-dim); }
 /* ── Mobile ─────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
+
+  /* Sidebar becomes a sticky top bar: brand + user chip/logout stay
+     visible on the first row; nav links collapse into a horizontally
+     scrollable rail on the second row. Previously the whole sidebar's
+     nav-sections were hidden on mobile, which also removed the Sign out
+     button (the user chip lives in its own nav-section). */
   .sidebar {
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 50;
     height: auto;
+    align-self: start;
     border-right: 0;
     border-bottom: 1px solid var(--border-soft);
+    box-shadow: var(--sh-sm);
     flex-direction: row;
     flex-wrap: wrap;
-    overflow-x: auto;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 10px 14px;
+    overflow: visible;
   }
-  .sidebar .nav-section { display: none; }
-  .main-header { flex-direction: column; align-items: flex-start; padding: 18px; }
-  .main-body { padding: 8px 18px 32px; }
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .sidebar .sidebar-brand { padding: 0 4px 0 0; margin-right: auto; }
+  .sidebar .sidebar-brand .brand-tagline { display: none; }
+
+  /* Nav link sections → horizontal scroll rail (brand row above, chip row below) */
+  .sidebar .nav-section:not([style*="margin-top:auto"]) {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+    margin-top: 2px;
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .sidebar .nav-section:not([style*="margin-top:auto"])::-webkit-scrollbar { display: none; }
+  .sidebar .nav-section-label { display: none; }
+  .sidebar .nav-link { white-space: nowrap; flex-shrink: 0; padding: 8px 12px; font-size: 13.5px; }
+
+  /* User controls (theme toggle + user chip + Sign out) — pinned to top-right */
+  .sidebar .nav-section[style*="margin-top:auto"] {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    margin-top: 0;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .sidebar .user-chip { padding: 4px 8px 4px 4px; gap: 8px; }
+  .sidebar .user-chip-text { display: none; }
+
+  /* User popover (admin dashboard) opens downward from the top bar so it
+     never clips off the top edge of a phone screen */
+  .user-popover { bottom: auto; top: calc(100% + 12px); left: auto; right: 0; }
+  .user-popover::before, .user-popover::after { top: auto; bottom: 100%; }
+  .user-popover::after { border-top-color: transparent; border-bottom-color: var(--border); }
+  .user-popover::before { border-top-color: transparent; border-bottom-color: var(--bg-card); }
+
+  .main-header { flex-direction: column; align-items: flex-start; padding: 16px 18px 6px; }
+  .main-header h1 { font-size: 22px; }
+  .main-body { padding: 8px 16px 28px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+
+  /* Wide tables scroll horizontally inside their cards instead of overflowing.
+     Only cards that contain a table get the scroll container, so the address
+     autocomplete dropdowns inside booking forms are never clipped. */
+  .card:has(.table) { overflow-x: auto; }
+  .table { min-width: 560px; }
+
+  /* Two-column form grids collapse to a single column on narrow screens */
+  form[style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; }
+  .status-stepper { overflow-x: auto; }
+
+  .footer { padding: 18px 16px; }
+}
+
+@media (max-width: 560px) {
+  .kpi-grid { grid-template-columns: 1fr; }
+  .main-header { padding: 14px 14px 4px; }
+  .main-body { padding: 6px 12px 24px; }
+  .sidebar { padding: 8px 10px; }
+  .card { padding: 14px; }
+  .card-header { flex-wrap: wrap; }
+  .modal-card { max-width: 100%; }
+  .modal-overlay { padding: 12px; }
+  .copy-toast { width: calc(100% - 32px); text-align: center; }
 }
 
 /* ── Segmented button selector (used in register) ─────────────────
