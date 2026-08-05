@@ -58,7 +58,12 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   justify-content: space-between;
   align-items: center;
+  /* iPhone Dynamic Island / notch: keep the pill bar below the status
+     area. env() is 0 on desktop / non-notched phones, so this only
+     adds space where an island actually exists. The plain `padding`
+     is the fallback for browsers without env() support. */
   padding: 18px 20px;
+  padding-top: calc(18px + env(safe-area-inset-top));
   margin-bottom: 22px;
   backdrop-filter: blur(14px);
   background: rgba(7, 17, 31, 0.82);

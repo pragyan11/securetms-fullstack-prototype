@@ -89,7 +89,15 @@ body.hm-active::before {
   top: 0; left: 0;
   right: 0;
   z-index: 50;
+  /* Dynamic Island / notch: keep the bar's content below the
+     status area. env() is 0 on desktop and on non-notched phones,
+     so this only pads where an island actually exists. */
   padding: 14px 28px;
+  /* Dynamic Island / notch: keep the bar's content below the status
+     area. env() is 0 on desktop and on non-notched phones, so this
+     only pads where an island actually exists. The plain `padding`
+     above is the fallback for browsers without env() support. */
+  padding-top: calc(14px + env(safe-area-inset-top));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -106,6 +114,7 @@ body.hm-active::before {
   -webkit-backdrop-filter: blur(14px);
   border-bottom-color: var(--border-soft);
   padding: 10px 28px;
+  padding-top: calc(10px + env(safe-area-inset-top));
 }
 
 .hm-brand {
@@ -646,6 +655,8 @@ body.hm-active::before {
   position: fixed;
   right: 24px;
   bottom: 24px;
+  right: calc(24px + env(safe-area-inset-right));
+  bottom: calc(24px + env(safe-area-inset-bottom));
   z-index: 40;
   width: 44px;
   height: 44px;
@@ -679,6 +690,8 @@ body.hm-active::before {
   position: fixed;
   bottom: 24px;
   left: 24px;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  left: calc(24px + env(safe-area-inset-left));
   z-index: 40;
   display: flex;
   align-items: center;
@@ -734,6 +747,7 @@ body.hm-active::before {
 @media (max-width: 720px) {
   .hm-nav {
     padding: 12px 16px;
+    padding-top: calc(12px + env(safe-area-inset-top));
     /* Always-on blurred bar on phones: while the address bar animates,
        a transparent nav reads as a floating rectangle with a gap above
        it. A subtle permanent blur keeps it flush and intentional. */
@@ -760,7 +774,7 @@ body.hm-active::before {
    overflow the viewport. Hide the tagline and tighten padding/gaps so
    the CTA buttons stay fully visible and tappable. */
 @media (max-width: 420px) {
-  .hm-nav { padding: 10px 12px; }
+  .hm-nav { padding: 10px 12px; padding-top: calc(10px + env(safe-area-inset-top)); }
   .hm-brand { gap: 7px; }
   .hm-brand-lockup .hm-brand-tagline { display: none; }
   .hm-nav-cta { gap: 6px; }
