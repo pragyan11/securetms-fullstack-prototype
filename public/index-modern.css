@@ -729,6 +729,18 @@ body.hm-active::before {
   .hm-trust-label { position: static; transform: none; margin: 0 auto 16px; width: max-content; }
 }
 
+/* Very narrow phones: the brand lockup + Register/Login buttons can
+   overflow the viewport. Hide the tagline and tighten padding/gaps so
+   the CTA buttons stay fully visible and tappable. */
+@media (max-width: 420px) {
+  .hm-nav { padding: 10px 12px; }
+  .hm-brand { gap: 7px; }
+  .hm-brand-lockup .hm-brand-tagline { display: none; }
+  .hm-nav-cta { gap: 6px; }
+  .hm-nav-cta .hm-btn { padding: 10px 13px; font-size: 13px; }
+  .hm-hero { padding-top: 132px; }
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    SpeedX animated brand mark + refined hero typography
    Self-contained SVG/CSS loop — no external assets. Honors the global
@@ -1002,7 +1014,45 @@ body.hm-active::before {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  .hm-trust-marquee { animation: none; flex-wrap: wrap; gap: 16px; }
   .hm-reveal { opacity: 1; transform: none; }
   .hm-feature, .hm-deeper-list li { transform: none !important; }
+
+  /* Signature motion stays ON for reduced-motion devices (owner
+     request): the animated SpeedX brand mark, the hero delivery
+     truck scene and the capability marquee are the site's visual
+     signature, so they play even with Reduce Motion enabled.
+     Everything else above remains frozen. Each rule re-asserts the
+     full `animation` shorthand because the global kill used
+     !important and the shorthand must beat it. */
+  .sx-spin     { animation: sxSpin 14s linear infinite !important; }
+  .sx-spin-rev { animation: sxSpinRev 20s linear infinite !important; }
+  .sx-halo     { animation: sxPulse 4.2s ease-in-out infinite !important; }
+  .sx-halo--b  { animation-delay: 2.1s !important; }
+  .sx-orbit    { animation: sxSpin 6s linear infinite !important; }
+  .sx-orbit--b { animation: sxSpinRev 9s linear infinite !important; }
+  .sx-stroke   { animation: sxDraw 4.6s ease-in-out infinite !important; }
+  .sx-stroke--b { animation-delay: 2.3s !important; }
+  .sx-streak   { animation: sxStreak 4.6s ease-in-out infinite !important; }
+  .sx-streak--b1, .sx-streak--b2 { animation-delay: 2.3s !important; }
+  .sx-core     { animation: sxCore 2.6s ease-in-out infinite !important; }
+
+  .hm-illu-grid      { animation: hmGridDrift 46s ease-in-out infinite alternate !important; }
+  .hm-link           { animation: hmLinkFlow 1.6s linear infinite !important; }
+  .hm-node-core      { animation: hmNodePulse 2.4s ease-in-out infinite !important; }
+  .hm-signal         { animation: hmSignalPulse 3s ease-in-out infinite !important; }
+  .hm-signal--2      { animation-delay: 1s !important; }
+  .hm-signal--3      { animation-delay: 2s !important; }
+  .hm-shield-halo    { animation: hmShieldGlow 3.4s ease-in-out infinite !important; }
+  .hm-shield-check   { animation: hmShieldGlow 3.4s ease-in-out infinite !important; animation-delay: 0.4s !important; }
+  .hm-road-center    { animation: hmRoadFlow 0.71s linear infinite !important; }
+  .hm-illu-truck     { animation: hmTruckDrive 16s linear infinite !important; }
+  .hm-illu-truck-body { animation: hmTruckBob 0.5s ease-in-out infinite !important; }
+  .hm-spoke          { animation: hmWheelSpin 0.9s linear infinite !important; }
+  .hm-wheel--b .hm-spoke { animation-delay: 0.06s !important; }
+  .hm-wheel--c .hm-spoke { animation: hmWheelSpin 0.7s linear infinite !important; animation-delay: 0.12s !important; }
+  .hm-illu-trail     { animation: hmTrailBlink 1.2s ease-in-out infinite !important; }
+  .hm-particle       { animation: hmFloat 5s ease-in-out infinite !important; }
+  .hm-particle--b,
+  .hm-particle--d    { animation: hmFloat 6.5s ease-in-out infinite !important; animation-delay: 1.4s !important; }
+  .hm-trust-marquee  { animation: hmMarquee 36s linear infinite !important; }
 }

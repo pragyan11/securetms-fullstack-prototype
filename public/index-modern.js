@@ -14,7 +14,11 @@
     window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const gsap = window.gsap || null;
   const ScrollTrigger = window.ScrollTrigger || null;
-  const hasGsap = !!gsap && !!ScrollTrigger && !REDUCED_MOTION;
+  // Owner request: the site's signature motion plays even on devices with
+  // Reduce Motion enabled, so GSAP choreography is NOT gated on the media
+  // query. REDUCED_MOTION is kept for the non-essential niceties (e.g.
+  // smooth-scroll behaviour on the back-to-top rocket).
+  const hasGsap = !!gsap && !!ScrollTrigger;
 
   /* ─────────────────── boot ─────────────────── */
   document.addEventListener('DOMContentLoaded', boot, { once: true });

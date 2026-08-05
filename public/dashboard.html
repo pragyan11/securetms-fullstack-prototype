@@ -92,17 +92,94 @@
     .user-popover .up-row .up-v { color:var(--text-hi); text-align:right; word-break:break-all; font-weight:500; }
     .user-popover .up-actions { display:flex; gap:8px; margin-top:12px; }
     .user-popover .up-actions .btn { flex:1; }
+    /* ── Animated SpeedX brand mark (same as homepage) ── */
+    .sx-mark { display:block; width:96px; height:96px; flex-shrink:0; }
+    .sidebar-brand .sx-mark { width:28px; height:28px; }
+    .sx-spin, .sx-spin-rev, .sx-orbit, .sx-halo, .sx-core { transform-box:view-box; transform-origin:48px 48px; }
+    .sx-spin     { animation:sxSpin 14s linear infinite; }
+    .sx-spin-rev { animation:sxSpinRev 20s linear infinite; }
+    @keyframes sxSpin    { to { transform:rotate(360deg); } }
+    @keyframes sxSpinRev { to { transform:rotate(-360deg); } }
+    .sx-halo    { animation:sxPulse 4.2s ease-in-out infinite; }
+    .sx-halo--b { animation-delay:2.1s; }
+    @keyframes sxPulse {
+      0%, 100% { opacity:0.55; transform:scale(1); }
+      50%      { opacity:1;    transform:scale(1.05); }
+    }
+    .sx-orbit    { animation:sxSpin 6s linear infinite; }
+    .sx-orbit--b { animation:sxSpinRev 9s linear infinite; }
+    .sx-orbit circle { filter:drop-shadow(0 0 6px rgba(34,211,238,0.9)); }
+    .sx-orbit--b circle { filter:drop-shadow(0 0 6px rgba(245,158,11,0.9)); }
+    .sx-stroke {
+      stroke-dasharray:1;
+      stroke-dashoffset:0;
+      animation:sxDraw 4.6s ease-in-out infinite;
+    }
+    .sx-stroke--b { animation-delay:2.3s; }
+    @keyframes sxDraw {
+      0%   { stroke-dashoffset:1; }
+      42%  { stroke-dashoffset:0; }
+      58%  { stroke-dashoffset:0; }
+      100% { stroke-dashoffset:1; }
+    }
+    .sx-streak { opacity:0.55; animation:sxStreak 4.6s ease-in-out infinite; }
+    .sx-streak--b1, .sx-streak--b2 { animation-delay:2.3s; }
+    @keyframes sxStreak {
+      0%, 14%   { opacity:0; }
+      32%       { opacity:0.6; }
+      68%       { opacity:0.6; }
+      86%, 100% { opacity:0; }
+    }
+    .sx-core { animation:sxCore 2.6s ease-in-out infinite; }
+    @keyframes sxCore {
+      0%, 100% { opacity:0.7; transform:scale(1); }
+      50%      { opacity:1;   transform:scale(1.35); }
+    }
   </style>
 </head>
 <body>
+  <!-- Shared logo gradients (referenced by every .sx-mark instance) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="sx-grad-a" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#67E8F9"/>
+        <stop offset="1" stop-color="#22D3EE"/>
+      </linearGradient>
+      <linearGradient id="sx-grad-b" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0" stop-color="#FBBF24"/>
+        <stop offset="1" stop-color="#F59E0B"/>
+      </linearGradient>
+      <radialGradient id="sx-halo-a">
+        <stop offset="0" stop-color="rgba(34,211,238,0.16)"/>
+        <stop offset="1" stop-color="rgba(34,211,238,0)"/>
+      </radialGradient>
+      <radialGradient id="sx-halo-b">
+        <stop offset="0" stop-color="rgba(245,158,11,0.13)"/>
+        <stop offset="1" stop-color="rgba(245,158,11,0)"/>
+      </radialGradient>
+    </defs>
+  </svg>
+
   <div class="shell">
     <aside class="sidebar" aria-label="Operations navigation">
       <a href="index.html" class="brand sidebar-brand">
-        <span class="brand-mark">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-            <path d="M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10"/>
-          </svg>
-        </span>
+        <svg class="sx-mark" viewBox="0 0 96 96" fill="none" aria-hidden="true" focusable="false">
+          <circle class="sx-halo" cx="48" cy="48" r="42" fill="url(#sx-halo-a)"/>
+          <circle class="sx-halo sx-halo--b" cx="48" cy="48" r="30" fill="url(#sx-halo-b)"/>
+          <circle class="sx-spin sx-ring" cx="48" cy="48" r="42" stroke="rgba(34,211,238,0.35)" stroke-width="1.1" stroke-dasharray="3 7"/>
+          <circle class="sx-spin-rev sx-ring sx-ring--amber" cx="48" cy="48" r="35" stroke="rgba(245,158,11,0.30)" stroke-width="1" stroke-dasharray="1 10"/>
+          <g class="sx-x">
+            <path class="sx-stroke sx-stroke--a" d="M31 31 L65 65" stroke="url(#sx-grad-a)" stroke-width="9" stroke-linecap="round" pathLength="1"/>
+            <path class="sx-streak sx-streak--a1" d="M24 24 L31 31" stroke="#67E8F9" stroke-width="3" stroke-linecap="round"/>
+            <path class="sx-streak sx-streak--a2" d="M65 65 L72 72" stroke="#22D3EE" stroke-width="3" stroke-linecap="round"/>
+            <path class="sx-stroke sx-stroke--b" d="M65 31 L31 65" stroke="url(#sx-grad-b)" stroke-width="9" stroke-linecap="round" pathLength="1"/>
+            <path class="sx-streak sx-streak--b1" d="M72 24 L65 31" stroke="#FBBF24" stroke-width="3" stroke-linecap="round"/>
+            <path class="sx-streak sx-streak--b2" d="M31 65 L24 72" stroke="#F59E0B" stroke-width="3" stroke-linecap="round"/>
+            <circle class="sx-core" cx="48" cy="48" r="3.2" fill="#F8FAFC"/>
+          </g>
+          <g class="sx-orbit"><circle cx="48" cy="6" r="2.6" fill="#22D3EE"/></g>
+          <g class="sx-orbit sx-orbit--b"><circle cx="48" cy="13" r="2" fill="#F59E0B"/></g>
+        </svg>
         <span class="brand-text">
           <strong>SpeedX</strong>
           <span class="brand-tagline">Secure Transport Management System</span>

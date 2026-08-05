@@ -87,6 +87,17 @@
 /* ── Reset + base ───────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+
+/* ── Mobile horizontal-scroll guard ──────────────────────────────────
+   Prevents any stray element (wide table, long URL, overflowing flex
+   row) from making the whole page slide sideways on phones. `clip` is
+   preferred because it does NOT create a scroll container, so the
+   sticky sidebar / topbar keep working. `hidden` is the fallback for
+   older browsers. */
+html, body { overflow-x: clip; }
+@supports not (overflow-x: clip) {
+  html, body { overflow-x: hidden; }
+}
 body {
   margin: 0;
   font-family: var(--font-sans);
@@ -736,6 +747,12 @@ input::placeholder, textarea::placeholder { color: var(--text-dim); }
   .card:has(.table) { overflow-x: auto; }
   .table { min-width: 560px; }
 
+  /* Dispatch board: the renderer emits three inline-style columns that
+     never collapse; force a single stack on phones so cards stay
+     tappable without sideways scrolling. Scoped to the grid div itself
+     so the skeleton loader and future siblings are unaffected. */
+  #dispatchOutput > div[style*="1fr 1fr 1fr"] { grid-template-columns: 1fr !important; }
+
   /* Two-column form grids collapse to a single column on narrow screens */
   form[style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; }
   .status-stepper { overflow-x: auto; }
@@ -753,6 +770,21 @@ input::placeholder, textarea::placeholder { color: var(--text-dim); }
   .modal-card { max-width: 100%; }
   .modal-overlay { padding: 12px; }
   .copy-toast { width: calc(100% - 32px); text-align: center; }
+
+  /* Compact chrome on phones: icons that read oversized on a narrow
+     screen scale down while keeping touch-friendly targets. */
+  .kpi-icon { width: 30px; height: 30px; border-radius: var(--r-sm); }
+  .kpi-icon svg { width: 15px; height: 15px; }
+  .brand-mark { width: 24px; height: 24px; border-radius: 6px; }
+  .brand-mark svg { width: 13px; height: 13px; }
+  .user-chip-avatar { width: 27px; height: 27px; font-size: 12px; }
+  .nav-link svg { width: 16px; height: 16px; }
+  .kpi { padding: 13px 14px; }
+  .kpi-value { font-size: 22px; }
+
+  /* Login page role cards (Customer / Driver / Admin) stack vertically
+     so the tiny three-column grid no longer squeezes text. */
+  .auth-form-card [style*="repeat(3,1fr)"] { grid-template-columns: 1fr !important; }
 }
 
 /* ── Segmented button selector (used in register) ─────────────────
@@ -1005,4 +1037,22 @@ input::placeholder, textarea::placeholder { color: var(--text-dim); }
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* The animated SpeedX brand mark (sidebar logo, auth pages) keeps
+     spinning even with Reduce Motion enabled — it is the site's
+     signature motion and the owner wants it visible on mobile too.
+     Everything else above remains frozen. The `animation` shorthand
+     re-asserts the original values so it beats the global !important
+     kill. Keyframes are defined by the page's own sx-mark CSS. */
+  .sx-spin     { animation: sxSpin 14s linear infinite !important; }
+  .sx-spin-rev { animation: sxSpinRev 20s linear infinite !important; }
+  .sx-halo     { animation: sxPulse 4.2s ease-in-out infinite !important; }
+  .sx-halo--b  { animation-delay: 2.1s !important; }
+  .sx-orbit    { animation: sxSpin 6s linear infinite !important; }
+  .sx-orbit--b { animation: sxSpinRev 9s linear infinite !important; }
+  .sx-stroke   { animation: sxDraw 4.6s ease-in-out infinite !important; }
+  .sx-stroke--b { animation-delay: 2.3s !important; }
+  .sx-streak   { animation: sxStreak 4.6s ease-in-out infinite !important; }
+  .sx-streak--b1, .sx-streak--b2 { animation-delay: 2.3s !important; }
+  .sx-core     { animation: sxCore 2.6s ease-in-out infinite !important; }
 }

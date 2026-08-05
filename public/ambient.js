@@ -1,27 +1,24 @@
 /* ════════════════════════════════════════════════════════════════════════
-   SpeedX — Ambient Effects (canvas particle field + reduced-motion)
+   SpeedX — Ambient Effects (canvas particle field)
    Loaded by every page that wants the cyber-logistics "living system" feel.
    - 60-90 drifting dots, slow oceanic drift
    - Hairline strokes connect neighbors within range
    - Mouse moves within 150px gently repel (~5px)
-   - prefers-reduced-motion freezes particles entirely
+   - NOTE: owner request — the ambient field runs on all devices,
+     including ones with Reduce Motion enabled (the drift is deliberately
+     slow and low-opacity).
    ════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
-  const REDUCED_MOTION =
-    window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  // Always inject the ambient glow (CSS animates it; reduced-motion disables CSS).
+  // Always inject the ambient glow (CSS animates it).
   if (!document.querySelector('.tt-glow')) {
     const glow = document.createElement('div');
     glow.className = 'tt-glow';
     glow.setAttribute('aria-hidden', 'true');
     document.body.appendChild(glow);
   }
-
-  if (REDUCED_MOTION) return; // Skip particle canvas entirely.
 
   const NUM = 84;            // particle count
   const CONNECT_DIST = 130;   // px — line distance to neighbour
@@ -154,7 +151,7 @@
   // Pause when tab hidden so we don't burn CPU in the background
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stop();
-    else if (!REDUCED_MOTION) start();
+    else start();
   });
 
   // Boot
