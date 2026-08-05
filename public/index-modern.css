@@ -59,7 +59,11 @@ body.hm-active {
   font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* `hidden` would turn body into a scroll container and break the
+     sticky nav; `clip` guards horizontal overflow without that side
+     effect. Fallback keeps the guard for browsers without `clip`. */
   overflow-x: hidden;
+  overflow-x: clip;
   margin: 0;
 }
 
@@ -77,6 +81,10 @@ body.hm-active::before {
 
 /* ── Navbar ────────────────────────────────────────────────────── */
 .hm-nav {
+  /* Desktop: fixed overlay above the hero. Switched to sticky on
+     mobile/tablet (see the 900px block) because a `position: fixed`
+     bar detaches from the top edge while the phone address bar
+     collapses/expands, leaving a visible gap above it. */
   position: fixed;
   top: 0; left: 0;
   right: 0;
@@ -715,10 +723,29 @@ body.hm-active::before {
   .hm-hero-illu svg { max-width: 100%; }
 }
 
+/* Mobile/tablet: sticky nav so the collapsing browser address bar can
+   never leave a gap above the bar while scrolling. Desktop keeps the
+   fixed overlay (no address bar there, and the hero padding-top is
+   tuned for it). */
+@media (max-width: 900px) {
+  .hm-nav { position: sticky; top: 0; }
+}
+
 @media (max-width: 720px) {
-  .hm-nav { padding: 12px 16px; }
+  .hm-nav {
+    padding: 12px 16px;
+    /* Always-on blurred bar on phones: while the address bar animates,
+       a transparent nav reads as a floating rectangle with a gap above
+       it. A subtle permanent blur keeps it flush and intentional. */
+    background: rgba(2, 6, 23, 0.60);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom-color: var(--border-soft);
+  }
   .hm-nav-links { display: none; }
-  .hm-hero { padding: 140px 20px 64px; }
+  /* Nav is in flow on mobile now, so trim the hero top padding that was
+     sized for the fixed overlay — keeps the headline at the same spot. */
+  .hm-hero { padding: 100px 20px 64px; }
   .hm-headline { font-size: 36px; }
   .hm-section { padding: 72px 20px; }
   .hm-section-title { font-size: 30px; }
@@ -738,7 +765,7 @@ body.hm-active::before {
   .hm-brand-lockup .hm-brand-tagline { display: none; }
   .hm-nav-cta { gap: 6px; }
   .hm-nav-cta .hm-btn { padding: 10px 13px; font-size: 13px; }
-  .hm-hero { padding-top: 132px; }
+  .hm-hero { padding-top: 92px; }
 }
 
 /* ════════════════════════════════════════════════════════════════════════

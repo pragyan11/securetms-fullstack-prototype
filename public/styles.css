@@ -431,7 +431,19 @@ button:hover, .btn:hover { transform: translateY(-1px); }
 
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; }
-  .topbar { position: static; flex-direction: column; align-items: flex-start; gap: 12px; border-radius: 20px; }
+  /* The topbar becomes a flush, full-width sticky bar on phones instead
+     of a rounded static rectangle floating in the page padding (which
+     left visible gaps above it). It pins to the top edge while scrolling. */
+  .app { padding-top: 0; }
+  .topbar {
+    position: sticky;
+    top: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    border-radius: 0 0 16px 16px;
+    margin-bottom: 14px;
+  }
   .output-toolbar { flex-direction: column; align-items: flex-start; }
   .cards-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
   /* Wide data tables scroll inside their panel instead of overflowing the
@@ -443,7 +455,8 @@ button:hover, .btn:hover { transform: translateY(-1px); }
 }
 
 @media (max-width: 600px) {
-  .app { padding: 16px; }
+  /* Keep the top edge flush so the sticky topbar has no gap above it */
+  .app { padding: 0 16px 16px; }
   .hero { padding: 28px 20px; }
   .hero h1 { font-size: 1.9rem; }
   .card { padding: 18px; }
