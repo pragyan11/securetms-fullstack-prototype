@@ -25,6 +25,9 @@ const logRoutes = require('./routes/logs');
 const geocodeRoutes = require('./routes/geocode');
 const messageRoutes = require('./routes/messages');
 const maintenanceRoutes = require('./routes/maintenance');
+const notificationRoutes = require('./routes/notifications');
+const publicRoutes = require('./routes/public');
+const { csrfProtection } = require('./middleware/csrf');
 const emailService = require('./services/email');
 const gpsSim = require('./services/gpsSimulation');
 const Challenge = require('./models/Challenge');
@@ -121,6 +124,23 @@ if (process.env.NODE_ENV === 'production') {
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
+
+// ── CSRF protection (E3) ─────────────────────────────────────────
+// Double-submit cookie: state-changing cookie-authenticated requests must
+// echo the csrf_token cookie as the X-CSRF-Token header. Bearer-token and
+// safe-method requests pass through untouched.
+app.use(csrfProtection);
+
+// ── Structured request logging (E5) ──────────────────────────────
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    if (req.path && req.path.startsWith('/api')) {
+      logger.info(`${req.method} ${req.path} ${res.statusCode} ${Date.now() - start}ms ip=${req.ip}`);
+    }
+  });
+  next();
+});
 // Correct rate limiting configuration: use 'max' to specify the request limit per window.
 // The previous 'limit' option was invalid, causing the middleware to block all requests with 429.
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
@@ -149,7 +169,7 @@ app.use(express.static('public', {
 // Clean routes for the role-based pages. express.static('public') already
 // serves these by name; the explicit handlers just guarantee stable URLs.
 // Cache-Control headers come from the wrapper above (setHeader interceptor).
-const pageHandlers = ['login', 'register', 'dashboard', 'customer', 'driver', 'admin-onboard', 'user_details'];
+const pageHandlers = ['login', 'register', 'dashboard', 'customer', 'driver', 'admin-onboard', 'user_details', 'recover', 'track', 'verify-email'];
 pageHandlers.forEach((name) => {
   app.get('/' + name, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', `${name}.html`));
@@ -169,9 +189,30 @@ app.use('/api/logs', logRoutes);
 app.use('/api/geocode', geocodeRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/public', publicRoutes);
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'SpeedX API' });
+  res.json({
+    status: 'ok',
+    service: 'SpeedX API',
+    version: '1.1.0',
+    uptime: Math.round(process.uptime()),
+    db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    node: process.version
+  });
+});
+
+// JSON 404 for unknown API routes
+app.use('/api', (req, res) => {
+  res.status(404).json({ message: 'Not found' });
+});
+
+// Central error handler (E5): log the stack, never leak internals.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  logger.error('Unhandled error: ' + (err && err.stack ? err.stack : err));
+  res.status(500).json({ message: 'Something went wrong on the server.' });
 });
 
 async function seedDemoData() {
@@ -196,14 +237,16 @@ async function seedDemoData() {
         email: 'customer@securetms.com',
         role: 'Customer',
         authMethod: 'Passkey',
-        recoveryEmail: 'customer-recovery@securetms.com'
+        recoveryEmail: 'customer-recovery@securetms.com',
+        emailVerified: true
       },
       {
         name: 'Marcus Lee',
         email: 'driver@securetms.com',
         role: 'Driver',
         authMethod: 'Passkey',
-        recoveryEmail: 'driver-recovery@securetms.com'
+        recoveryEmail: 'driver-recovery@securetms.com',
+        emailVerified: true
       }
     ];
     const createdNow = [];
@@ -241,7 +284,8 @@ async function seedDemoData() {
           name: 'Demo Admin',
           email: devAdminEmail,
           authMethod: 'Passkey',
-          recoveryEmail: 'admin-recovery@securetms.com'
+          recoveryEmail: 'admin-recovery@securetms.com',
+          emailVerified: true
         }
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -419,6 +463,17 @@ function startHttpServer(port) {
 
   io.on('connection', (socket) => {
     logger.info(`Client connected: ${socket.id}`);
+
+    // Per-user notification rooms — the client announces who it is and
+    // services/notify.js emits persisted notifications to that room.
+    socket.on('join:user', (userId) => {
+      if (userId && typeof userId === 'string') {
+        socket.join('user:' + userId);
+      }
+    });
+    socket.on('leave:user', (userId) => {
+      if (userId) socket.leave('user:' + userId);
+    });
 
     socket.on('disconnect', () => {
       logger.info(`Client disconnected: ${socket.id}`);

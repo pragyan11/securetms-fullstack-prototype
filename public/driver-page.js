@@ -358,6 +358,8 @@ messaging with dispatch, multi-stop route management, dark mode.
       try {
         driverSocket = window.io({ withCredentials: true, transports: ['websocket', 'polling'] });
         driverTrack.bindSocket(driverSocket);
+        driverSocket.on('connect', () => { const uid = window.authUser && (window.authUser.id || window.authUser._id); if (uid) driverSocket.emit('join:user', String(uid)); });
+        driverSocket.on('notification:new', (n) => { if (typeof window.notify === 'function') window.notify(n.title || 'Notification', { kind: n.type === 'error' ? 'error' : n.type === 'warn' ? 'warn' : 'info' }); });
       } catch (_e) {}
     }
   }

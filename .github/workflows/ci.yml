@@ -22,4 +22,5 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # Add any lint or test commands here if they become available
+      - name: Run unit tests
+        run: npm test

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="SpeedX — Email verification" />
+  <title>SpeedX — Verify email</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10' fill='none' stroke='%230F4C81' stroke-width='1.6'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="theme.css" />
+</head>
+<body>
+  <div class="auth-shell">
+    <section class="auth-form-side" aria-label="Email verification">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
+        <a href="index.html" class="brand" aria-label="SpeedX home">
+          <span class="brand-mark">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+              <path d="M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10"/>
+            </svg>
+          </span>
+          <span class="brand-text"><strong>SpeedX</strong><span class="brand-tagline">Secure Transport Management System</span></span>
+        </a>
+      </div>
+      <div class="auth-form-card" style="text-align:center;padding:40px 32px;">
+        <span class="eyebrow">Verification</span>
+        <h1 style="font-size:24px;margin-top:10px;">Confirming your email</h1>
+        <p id="vMsg" style="margin-top:14px;font-size:14px;color:var(--text-muted);min-height:20px;" role="status" aria-live="polite">Verifying…</p>
+        <a href="/login.html" class="btn" style="margin-top:24px;width:100%;">Go to sign in</a>
+      </div>
+    </section>
+    <aside class="auth-visual-side" aria-hidden="true">
+      <h2>Verified is better.</h2>
+      <p>Confirming your email keeps your account reachable for delivery updates and recovery.</p>
+    </aside>
+  </div>
+  <script src="app.js" defer></script>
+  <script src="verify-email.js" defer></script>
+</body>
+</html>

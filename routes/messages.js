@@ -1,6 +1,9 @@
 const express = require('express');
 const auth = require('../middleware/auth');
 const Message = require('../models/Message');
+const User = require('../models/User');
+const notify = require('../services/notify');
+const webhooks = require('../services/webhooks');
 const router = express.Router();
 
 router.use(auth);
@@ -27,6 +30,18 @@ router.post('/', async (req, res) => {
       toEmail, subject: subject || '', body, shipmentId: shipmentId || undefined
     });
     if (req.io) req.io.emit('message:new', msg);
+    webhooks.dispatch('message.sent', { from: req.user.email, to: toEmail, subject: subject || '' }).catch(() => {});
+    const recipient = await User.findOne({ email: toEmail.toLowerCase().trim() }).select('_id');
+    if (recipient) {
+      notify.notifyUser(recipient, {
+        title: 'New message from ' + (req.user.name || req.user.email),
+        body: subject || body.slice(0, 80),
+        type: 'info',
+        link: req.user.role === 'Driver' ? '/customer.html' : '/driver.html',
+        event: 'message.sent',
+        io: req.io
+      }).catch(() => {});
+    }
     res.status(201).json({ message: 'Sent', data: msg });
   } catch (err) {
     res.status(500).json({ message: err.message });

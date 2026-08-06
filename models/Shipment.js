@@ -21,6 +21,12 @@ const ShipmentSchema = new mongoose.Schema({
   rating: { type: Number, min: 1, max: 5 },
   ratingComment: { type: String },
   stops: [{ address: String, status: { type: String, default: 'Pending' }, sequence: Number }],
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+
+  // ── Dispatch / lifecycle (Phase C + D) ──────────────────────────
+  dispatchedAt: { type: Date },
+  deliveredAt: { type: Date },
+  cancelledAt: { type: Date },
+  cancelReason: { type: String }
 });
 module.exports = mongoose.model('Shipment', ShipmentSchema);

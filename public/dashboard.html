@@ -236,6 +236,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8 L12 14 L21 8 M3 8 V18 a2 2 0 0 0 2 2 H19 a2 2 0 0 0 2 -2 V8 M3 8 a2 2 0 0 1 2 -2 H19 a2 2 0 0 1 2 2"/></svg>
           Invitations
         </a>
+        <a href="#settings" class="nav-link admin-only" data-tab="settingsTab">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </a>
       </div>
 
       <div class="nav-section" style="margin-top:auto;">
@@ -331,6 +335,9 @@
             <th class="sortable" data-sort="origin">Origin → Destination <span class="sort-icon"></span></th>
             <th class="sortable" data-sort="status">Status <span class="sort-icon"></span></th>
             <th class="sortable" data-sort="serviceZone">Zone <span class="sort-icon"></span></th>
+            <th>Invoice</th>
+            <th>Price</th>
+            <th>Payment</th>
             <th class="sortable" data-sort="createdAt">Created <span class="sort-icon"></span></th>
             <th>Actions</th>
           </tr></thead><tbody id="bookingsOutput"></tbody></table>
@@ -373,6 +380,8 @@
             <th>Location</th>
             <th class="sortable" data-sort="status">Status <span class="sort-icon"></span></th>
             <th>Zone</th>
+            <th>Odometer</th>
+            <th>Fuel</th>
             <th>Actions</th>
           </tr></thead><tbody id="fleetOutput"></tbody></table>
           <div class="pagination" id="fleetPagination"></div>
@@ -396,10 +405,28 @@
 
         <!-- Analytics Tab -->
         <div class="card" id="analyticsTab" style="display:none">
-          <div class="card-header"><div class="card-title">Analytics</div><div class="card-sub">Booking and shipment trends.</div></div>
+          <div class="card-header"><div class="card-title">Analytics</div><div class="card-sub">Revenue, volume and fleet utilisation trends.</div>
+            <div style="display:flex;gap:8px;">
+              <select id="analyticsPeriod" style="width:auto;height:36px;font-size:13px;">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="365">Last 12 months</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" id="exportAnalyticsBtn">Export CSV</button>
+            </div>
+          </div>
           <div class="stats-grid" id="analyticsStats"></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;">
+            <div class="chart-container" style="margin-bottom:0;"><div class="chart-title">Bookings per day</div><div class="bar-chart" id="bookingsDayChart"></div></div>
+            <div class="chart-container" style="margin-bottom:0;"><div class="chart-title">Revenue per day</div><div class="bar-chart" id="revenueDayChart"></div></div>
+          </div>
           <div class="chart-container"><div class="chart-title">Bookings by Status</div><div class="bar-chart" id="bookingsBarChart"></div></div>
           <div class="chart-container"><div class="chart-title">Shipments by Status</div><div class="bar-chart" id="shipmentsBarChart"></div></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;">
+            <div class="chart-container" style="margin-bottom:0;"><div class="chart-title">Top routes</div><div id="topRoutesOutput"><div style="color:var(--text-muted);font-size:13px;">No data</div></div></div>
+            <div class="chart-container" style="margin-bottom:0;"><div class="chart-title">Fleet utilisation</div><div id="utilizationOutput"><div style="color:var(--text-muted);font-size:13px;">No data</div></div></div>
+          </div>
         </div>
 
         <!-- Map -->
@@ -410,19 +437,70 @@
         </div>
 
         <!-- Audit Logs -->
-        <div class="card" id="logsTab" style="display:none"><div class="card-header"><div class="card-title">Audit logs</div><button class="btn btn-secondary btn-sm" id="refreshLogsBtn">Refresh</button></div>
-          <table class="table"><thead><tr><th>When</th><th>Action</th><th>User</th><th>Details</th></tr></thead><tbody id="logsOutput"></tbody></table>
+        <div class="card" id="logsTab" style="display:none">
+          <div class="card-header"><div class="card-title">Audit logs</div><button class="btn btn-secondary btn-sm" id="refreshLogsBtn">Refresh</button></div>
+          <div class="toolbar">
+            <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="logsSearch" placeholder="Search action, user or details…" /></div>
+            <select id="logsActionFilter"><option value="">All actions</option></select>
+            <button class="btn btn-secondary btn-sm" id="exportLogsBtn">Export CSV</button>
+          </div>
+          <table class="table"><thead><tr><th>When</th><th>Action</th><th>User</th><th>Details</th><th>IP</th></tr></thead><tbody id="logsOutput"></tbody></table>
+          <div class="pagination" id="logsPagination"></div>
         </div>
 
         <!-- Team -->
-        <div class="card" id="teamTab" style="display:none"><div class="card-header"><div class="card-title">Team</div><button class="btn btn-secondary btn-sm" id="refreshUsersBtn">Refresh</button></div>
-          <table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead><tbody id="usersOutput"></tbody></table>
+        <div class="card" id="teamTab" style="display:none">
+          <div class="card-header"><div class="card-title">Team</div><button class="btn btn-secondary btn-sm" id="refreshUsersBtn">Refresh</button></div>
+          <div class="toolbar">
+            <div class="search-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="usersSearch" placeholder="Search users…" /></div>
+            <select id="usersRoleFilter"><option value="">All roles</option><option value="Admin">Admin</option><option value="Driver">Driver</option><option value="Customer">Customer</option></select>
+          </div>
+          <table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Verified</th><th>Created</th><th>Actions</th></tr></thead><tbody id="usersOutput"></tbody></table>
+          <div class="pagination" id="usersPagination"></div>
         </div>
 
         <!-- Invites -->
         <div class="card" id="invitesTab" style="display:none"><div class="card-header"><div class="card-title">Invitations</div></div>
           <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">Each invite produces a single-use URL containing an unguessable 64-character token. Share it through a secure channel. The link expires in 7 days.</p>
           <table class="table"><thead><tr><th>Created</th><th>Role</th><th>Email</th><th>Expires</th><th>Used</th><th>Invite URL</th></tr></thead><tbody id="invitesOutput"></tbody></table>
+        </div>
+
+        <!-- Settings -->
+        <div class="card" id="settingsTab" style="display:none">
+          <div class="card-header"><div class="card-title">Settings</div><div class="card-sub">Pricing, branding and external integrations. Changes apply to new quotes immediately.</div></div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;">
+            <div style="background:var(--bg-card);border:1px solid var(--border-soft);border-radius:12px;padding:16px;">
+              <div style="font-size:13px;font-weight:600;color:var(--text-hi);margin-bottom:12px;">Pricing &amp; branding</div>
+              <form id="settingsForm" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div><label>Organisation name</label><input id="stOrgName" /></div>
+                <div><label>Currency</label><input id="stCurrency" /></div>
+                <div style="grid-column:1/-1;"><label>Service zones (comma separated)</label><input id="stZones" /></div>
+                <div><label>Base rate</label><input id="stBaseRate" type="number" step="0.5" /></div>
+                <div><label>Rate per km</label><input id="stRateKm" type="number" step="0.1" /></div>
+                <div><label>Standard multiplier</label><input id="stMultStd" type="number" step="0.1" /></div>
+                <div><label>Express multiplier</label><input id="stMultExp" type="number" step="0.1" /></div>
+                <div style="grid-column:1/-1;"><label>Priority multiplier</label><input id="stMultPri" type="number" step="0.1" /></div>
+                <div style="grid-column:1/-1;display:flex;gap:10px;">
+                  <button type="submit" class="btn">Save settings</button>
+                  <span id="settingsMsg" style="font-size:12px;color:var(--text-muted);align-self:center;"></span>
+                </div>
+              </form>
+            </div>
+            <div style="background:var(--bg-card);border:1px solid var(--border-soft);border-radius:12px;padding:16px;">
+              <div style="font-size:13px;font-weight:600;color:var(--text-hi);margin-bottom:6px;">Outgoing webhooks</div>
+              <p style="font-size:12px;color:var(--text-muted);margin:0 0 12px;line-height:1.5;">POST JSON events to external systems (SMS/push providers, ERPs, analytics). Events are HMAC-signed when a secret is set.</p>
+              <div id="webhooksList" style="margin-bottom:12px;"><div style="color:var(--text-muted);font-size:13px;">Loading…</div></div>
+              <form id="webhookForm" style="display:grid;grid-template-columns:1fr;gap:10px;">
+                <div><label>Endpoint URL</label><input id="whUrl" type="url" placeholder="https://example.com/hooks/speedx" required /></div>
+                <div><label>Secret (optional)</label><input id="whSecret" type="text" placeholder="HMAC signing secret" /></div>
+                <div><label>Events (comma separated)</label><input id="whEvents" type="text" placeholder="booking.created, shipment.updated, shipment.delivered" required /></div>
+                <div style="display:flex;gap:10px;align-items:center;">
+                  <button type="submit" class="btn btn-sm">Add webhook</button>
+                  <span id="whMsg" style="font-size:12px;color:var(--text-muted);"></span>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -438,7 +516,7 @@
   <!-- Notifications Panel -->
   <div class="notif-backdrop" id="notifBackdrop"></div>
   <div class="notifications-panel" id="notifPanel">
-    <div class="panel-header"><h3 style="margin:0;">Notifications</h3><button class="btn btn-ghost btn-sm" id="closeNotifPanel">✕</button></div>
+    <div class="panel-header"><h3 style="margin:0;">Notifications</h3><div style="display:flex;gap:6px;"><button class="btn btn-ghost btn-sm" id="markAllReadBtn" type="button">Mark all read</button><button class="btn btn-ghost btn-sm" id="closeNotifPanel">✕</button></div></div>
     <div class="panel-body" id="notifBody"><div style="text-align:center;color:var(--text-muted);padding:24px;">No notifications yet</div></div>
   </div>
 
@@ -452,6 +530,9 @@
         <div><label>Location</label><input id="avLocation" /></div>
         <div><label>Status</label><select id="avStatus"><option value="Available">Available</option><option value="In Transit">In Transit</option><option value="Maintenance">Maintenance</option></select></div>
         <div><label>Service Zone</label><select id="avZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
+        <div><label>Odometer (km)</label><input id="avOdo" type="number" value="0" /></div>
+        <div><label>Fuel level (%)</label><input id="avFuel" type="number" min="0" max="100" value="100" /></div>
+        <div><label>Capacity (kg)</label><input id="avCapacity" type="number" value="1000" /></div>
         <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
           <button type="button" class="btn btn-secondary" data-close-modal="addVehicleModal">Cancel</button>
           <button type="submit" class="btn">Add Vehicle</button>
@@ -487,8 +568,12 @@
         <div style="grid-column:1/-1;"><label>Customer Name</label><input id="ebCustomer" /></div>
         <div><label>Origin</label><input id="ebOrigin" /></div>
         <div><label>Destination</label><input id="ebDestination" /></div>
-        <div><label>Status</label><select id="ebStatus"><option value="Pending">Pending</option><option value="Confirmed">Confirmed</option><option value="Completed">Completed</option></select></div>
+        <div><label>Status</label><select id="ebStatus"><option value="Pending">Pending</option><option value="Confirmed">Confirmed</option><option value="Completed">Completed</option><option value="Cancelled">Cancelled</option><option value="Rescheduled">Rescheduled</option></select></div>
         <div><label>Zone</label><select id="ebZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
+        <div><label>Price</label><input id="ebPrice" type="number" step="0.01" /></div>
+        <div><label>Payment</label><select id="ebPayment"><option value="Unpaid">Unpaid</option><option value="Paid">Paid</option><option value="Refunded">Refunded</option></select></div>
+        <div style="grid-column:1/-1;"><label>Requested pickup date</label><input id="ebPickupDate" type="date" /></div>
+        <div style="grid-column:1/-1;"><label>Cancel / reschedule reason</label><input id="ebCancelReason" placeholder="Optional — required when cancelling" /></div>
         <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
           <button type="button" class="btn btn-secondary" data-close-modal="editBookingModal">Cancel</button>
           <button type="submit" class="btn">Save Changes</button>
@@ -510,6 +595,7 @@
         <div><label>Status</label><select id="esStatus"><option value="Created">Created</option><option value="Picked Up">Picked Up</option><option value="In Transit">In Transit</option><option value="Delivered">Delivered</option><option value="Cancelled">Cancelled</option></select></div>
         <div><label>ETA</label><input id="esEta" /></div>
         <div><label>Current Location</label><input id="esLocation" /></div>
+        <div style="grid-column:1/-1;"><label>Route stops <span style="color:var(--text-dim);">(one per line)</span></label><textarea id="esStops" rows="3" placeholder="Sydney Hub&#10;Canberra Depot&#10;Melbourne CBD" style="min-height:76px;"></textarea></div>
         <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
           <button type="button" class="btn btn-secondary" data-close-modal="editShipmentModal">Cancel</button>
           <button type="submit" class="btn">Save Changes</button>
@@ -528,6 +614,8 @@
         <div><label>Delivery Address <span style="color:var(--red-600);">*</span></label><input id="cbDestination" placeholder="e.g. 456 Park Ave, Melbourne" required /></div>
         <div><label>Service Zone</label><select id="cbZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
         <div><label>Priority</label><select id="cbPriority"><option value="Standard">Standard</option><option value="Express">Express</option><option value="Priority">Priority</option></select></div>
+        <div><label>Requested pickup date</label><input id="cbPickupDate" type="date" /></div>
+        <div style="display:flex;align-items:flex-end;gap:8px;"><button type="button" class="btn btn-secondary btn-sm" id="quoteBtn">Get estimate</button><span id="quoteOutput" style="font-size:13px;color:var(--text-muted);padding-bottom:8px;"></span></div>
         <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
           <button type="button" class="btn btn-secondary" data-close-modal="createBookingModal">Cancel</button>
           <button type="submit" class="btn">Create Booking</button>
@@ -568,6 +656,9 @@
         <div><label>Location</label><input id="evLocation" /></div>
         <div><label>Status</label><select id="evStatus"><option value="Available">Available</option><option value="In Transit">In Transit</option><option value="Maintenance">Maintenance</option></select></div>
         <div><label>Zone</label><select id="evZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
+        <div><label>Odometer (km)</label><input id="evOdo" type="number" /></div>
+        <div><label>Fuel level (%)</label><input id="evFuel" type="number" min="0" max="100" /></div>
+        <div><label>Capacity (kg)</label><input id="evCapacity" type="number" /></div>
         <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
           <button type="button" class="btn btn-secondary" data-close-modal="editVehicleModal">Cancel</button>
           <button type="submit" class="btn">Save Changes</button>

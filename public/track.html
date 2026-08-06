@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="SpeedX — Track your shipment by ID. No account needed." />
+  <title>SpeedX — Track a shipment</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10' fill='none' stroke='%230F4C81' stroke-width='1.6'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="/libs/leaflet/leaflet.css" />
+</head>
+<body>
+  <div class="auth-shell" style="min-height:100vh;">
+    <section class="auth-form-side" aria-label="Track a shipment">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;">
+        <a href="index.html" class="brand" aria-label="SpeedX home">
+          <span class="brand-mark">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+              <path d="M12 3 L20 7 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V7 Z M9 12 L11 14 L15 10"/>
+            </svg>
+          </span>
+          <span class="brand-text">
+            <strong>SpeedX</strong>
+            <span class="brand-tagline">Secure Transport Management System</span>
+          </span>
+        </a>
+        <a href="/login.html" class="btn btn-ghost btn-sm">Sign in</a>
+      </div>
+
+      <div class="auth-form-card">
+        <span class="eyebrow">Tracking</span>
+        <h1 style="font-size:28px;margin-top:8px;">Where's my delivery?</h1>
+        <p style="color:var(--text-muted);font-size:14.5px;margin-top:8px;margin-bottom:20px;">
+          Enter the tracking ID from your confirmation email — no account needed.
+        </p>
+        <form id="trackForm" novalidate>
+          <div style="margin-bottom:14px;">
+            <label for="trackInput">Tracking ID</label>
+            <input id="trackInput" type="text" placeholder="e.g. SHP-1001" style="font-family:var(--font-mono);text-transform:uppercase;" required />
+          </div>
+          <button class="btn btn-lg" type="submit" style="width:100%;">Track shipment</button>
+        </form>
+        <p id="trackMsg" style="margin-top:14px;font-size:13px;color:var(--red-600);min-height:18px;" role="status" aria-live="polite"></p>
+      </div>
+
+      <div id="trackOutput" style="margin-top:16px;min-height:120px;"></div>
+
+      <p style="margin-top:32px;font-size:12px;color:var(--text-faint);">
+        © SpeedX — Secure transport, transparent delivery
+      </p>
+    </section>
+
+    <aside class="auth-visual-side" aria-hidden="true">
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:rgba(255,255,255,0.78);margin-bottom:24px;">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10B981;"></span>
+        Live status, zero friction
+      </div>
+      <h2>Every parcel, visible end to end.</h2>
+      <p>Recipients see the same live status, ETA and route the operations team sees — without creating an account or installing anything.</p>
+    </aside>
+  </div>
+
+  <script src="utils.js" defer></script>
+  <script src="app.js" defer></script>
+  <script src="libs/leaflet/leaflet.js" defer></script>
+  <script src="/socket.io/socket.io.js" defer></script>
+  <script src="track.js" defer></script>
+</body>
+</html>

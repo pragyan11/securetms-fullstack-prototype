@@ -30,24 +30,27 @@ function initTransporter() {
   }
 }
 
-async function sendEmail({ to, subject, text, html }) {
+async function sendEmail({ to, subject, text, html }, attempts = 2) {
   if (!transporter) { logger.info('[email] Transporter not ready, logging: ' + subject); return null; }
-  try {
-    const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM || '"SpeedX" <noreply@speedx.com>',
-      to, subject, text, html
-    });
-    logger.info('[email] Sent: ' + info.messageId);
-    // Ethereal preview URL
-    if (info.messageId && nodemailer.getTestMessageUrl) {
-      const previewUrl = nodemailer.getTestMessageUrl(info);
-      if (previewUrl) logger.info('[email] Preview: ' + previewUrl);
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const info = await transporter.sendMail({
+        from: process.env.EMAIL_FROM || '"SpeedX" <noreply@speedx.com>',
+        to, subject, text, html
+      });
+      logger.info('[email] Sent: ' + info.messageId);
+      // Ethereal preview URL
+      if (info.messageId && nodemailer.getTestMessageUrl) {
+        const previewUrl = nodemailer.getTestMessageUrl(info);
+        if (previewUrl) logger.info('[email] Preview: ' + previewUrl);
+      }
+      return info;
+    } catch (err) {
+      logger.error('[email] Attempt ' + (i + 1) + '/' + attempts + ' failed: ' + err.message);
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, 600 * (i + 1)));
     }
-    return info;
-  } catch (err) {
-    logger.error('[email] Failed: ' + err.message);
-    return null;
   }
+  return null;
 }
 
 const BASE_URL = () => process.env.BASE_URL || 'http://localhost:4000';
@@ -159,6 +162,36 @@ async function notifyStatusChange(shipment, recipientEmail) {
   });
 }
 
+async function notifyEmailVerification(toEmail, verifyUrl) {
+  return sendEmail({
+    to: toEmail,
+    subject: 'Verify your SpeedX email',
+    text: 'Confirm your email address to finish setting up your SpeedX account.\n\n' + verifyUrl,
+    html: wrapHtml('Confirm your email address ✉️', `<p style="color:#334155;font-size:14px;margin:0 0 18px;">Click the button below to verify <strong>${escapeEmail(toEmail)}</strong> on your SpeedX account. The link expires in 24 hours.</p>`, 'Verify email', verifyUrl)
+  });
+}
+
+async function notifyRecoveryLink(toEmail, recoveryUrl, minutes = 15) {
+  return sendEmail({
+    to: toEmail,
+    subject: 'SpeedX account recovery',
+    text: 'Use this link to reset your passkeys. It expires in ' + minutes + ' minutes.\n\n' + recoveryUrl,
+    html: wrapHtml('Recover your SpeedX account 🔑', `<p style="color:#334155;font-size:14px;margin:0 0 18px;">We received a request to recover the SpeedX account for <strong>${escapeEmail(toEmail)}</strong>. This link lets you remove the lost passkeys and enroll a new one. It expires in ${minutes} minutes.</p><p style="color:#64748b;font-size:12px;">If you didn't request this, you can safely ignore this email.</p>`, 'Recover account', recoveryUrl)
+  });
+}
+
+async function notifyRecoveryCodes(toEmail, codes) {
+  const list = Array.isArray(codes) && codes.length
+    ? `<div style="background:#0f172a;border-radius:10px;padding:14px 16px;font-family:monospace;font-size:13px;color:#67e8f9;line-height:1.9;">${codes.map(c => escapeEmail(c)).join('<br>')}</div>`
+    : '';
+  return sendEmail({
+    to: toEmail,
+    subject: 'Your SpeedX recovery codes',
+    text: 'Store these one-time recovery codes somewhere safe. Each can be used once if you lose your passkeys:\n\n' + (Array.isArray(codes) ? codes.join('\n') : ''),
+    html: wrapHtml('Your one-time recovery codes 🔐', `<p style="color:#334155;font-size:14px;margin:0 0 14px;">Each code below can be used <strong>once</strong> to unlock your account and enroll a new passkey if you lose your device. Keep them somewhere safe and never share them.</p>${list}`, 'Open SpeedX', BASE_URL())
+  });
+}
+
 async function notifyDeliveryConfirmed(shipment, customerEmail, adminEmail) {
   const recipients = [customerEmail];
   if (adminEmail) recipients.push(adminEmail);
@@ -170,4 +203,9 @@ async function notifyDeliveryConfirmed(shipment, customerEmail, adminEmail) {
   });
 }
 
-module.exports = { initTransporter, sendEmail, notifyBookingCreated, notifyShipmentCreated, notifyDriverAssigned, notifyStatusChange, notifyDeliveryConfirmed };
+module.exports = {
+  initTransporter, sendEmail,
+  notifyBookingCreated, notifyShipmentCreated, notifyDriverAssigned,
+  notifyStatusChange, notifyDeliveryConfirmed,
+  notifyEmailVerification, notifyRecoveryLink, notifyRecoveryCodes
+};

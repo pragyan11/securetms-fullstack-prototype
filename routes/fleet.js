@@ -4,6 +4,7 @@ const Vehicle = require('../models/Vehicle');
 const AuditLog = require('../models/AuditLog');
 const auth = require('../middleware/auth');
 const requireRole = require('../middleware/roles');
+const webhooks = require('../services/webhooks');
 const router = express.Router();
 
 router.use(auth);
@@ -38,40 +39,43 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post(
-  '/',
-  requireRole('Admin'),
-  [
-    body('vehicleNumber').notEmpty().trim().escape(),
-    body('vehicleType').notEmpty().trim().escape(),
-    body('driverName').optional().trim().escape(),
-    body('location').optional().trim().escape(),
-    body('status').optional().isIn(['Available', 'In Transit', 'Maintenance']),
-    body('serviceZone').optional().isIn(['North', 'South', 'East', 'West', 'Central', 'Downtown'])
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-    try {
-      let vehicleNumber = req.body.vehicleNumber;
-      if (vehicleNumber) {
-        const existing = await Vehicle.findOne({ vehicleNumber });
-        if (existing) vehicleNumber = `${vehicleNumber}-${Date.now().toString(36)}`;
-      }
-      const vehicle = await Vehicle.create({ ...req.body, vehicleNumber, updatedAt: new Date() });
-      await AuditLog.create({ userEmail: req.user.email, action: 'VEHICLE_CREATE', details: `Added ${vehicle.vehicleNumber}`, ipAddress: req.ip });
-      if (req.io) {
-        req.io.emit('fleet:created', vehicle);
-        req.io.emit('activity:new', { action: 'VEHICLE_CREATE', userEmail: req.user.email, details: `Added ${vehicle.vehicleNumber}`, createdAt: new Date() });
-      }
-      res.status(201).json({ message: 'Vehicle added', vehicle });
-    } catch (err) {
-      res.status(500).json({ message: err.message });
-    }
-  }
-);
+const vehicleValidation = [
+  body('vehicleNumber').notEmpty().trim().escape(),
+  body('vehicleType').notEmpty().trim().escape(),
+  body('driverName').optional().trim().escape(),
+  body('location').optional().trim().escape(),
+  body('status').optional().isIn(['Available', 'In Transit', 'Maintenance']),
+  body('serviceZone').optional().isIn(['North', 'South', 'East', 'West', 'Central', 'Downtown']),
+  body('odometerKm').optional().isNumeric(),
+  body('fuelLevel').optional().isFloat({ min: 0, max: 100 }),
+  body('capacityKg').optional().isNumeric()
+];
 
-router.put('/:id', requireRole('Admin'), async (req, res) => {
+router.post('/', requireRole('Admin'), vehicleValidation, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+  try {
+    let vehicleNumber = req.body.vehicleNumber;
+    if (vehicleNumber) {
+      const existing = await Vehicle.findOne({ vehicleNumber });
+      if (existing) vehicleNumber = `${vehicleNumber}-${Date.now().toString(36)}`;
+    }
+    const vehicle = await Vehicle.create({ ...req.body, vehicleNumber, odometerKm: req.body.odometerKm || 0, fuelLevel: req.body.fuelLevel != null ? req.body.fuelLevel : 100, updatedAt: new Date() });
+    await AuditLog.create({ userEmail: req.user.email, action: 'VEHICLE_CREATE', details: `Added ${vehicle.vehicleNumber}`, ipAddress: req.ip });
+    if (req.io) {
+      req.io.emit('fleet:created', vehicle);
+      req.io.emit('activity:new', { action: 'VEHICLE_CREATE', userEmail: req.user.email, details: `Added ${vehicle.vehicleNumber}`, createdAt: new Date() });
+    }
+    webhooks.dispatch('vehicle.created', { vehicleNumber: vehicle.vehicleNumber, status: vehicle.status }).catch(() => {});
+    res.status(201).json({ message: 'Vehicle added', vehicle });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.put('/:id', requireRole('Admin'), vehicleValidation, async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
   try {
     const vehicle = await Vehicle.findByIdAndUpdate(req.params.id, { ...req.body, updatedAt: new Date() }, { new: true });
     if (!vehicle) return res.status(404).json({ message: 'Vehicle not found' });
@@ -80,6 +84,7 @@ router.put('/:id', requireRole('Admin'), async (req, res) => {
       req.io.emit('fleet:updated', vehicle);
       req.io.emit('activity:new', { action: 'VEHICLE_UPDATE', userEmail: req.user.email, details: `Updated ${vehicle.vehicleNumber}`, createdAt: new Date() });
     }
+    webhooks.dispatch('vehicle.updated', { vehicleNumber: vehicle.vehicleNumber, status: vehicle.status }).catch(() => {});
     res.json({ message: 'Vehicle updated', vehicle });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -95,6 +100,7 @@ router.delete('/:id', requireRole('Admin'), async (req, res) => {
       req.io.emit('fleet:deleted', req.params.id);
       req.io.emit('activity:new', { action: 'VEHICLE_DELETE', userEmail: req.user.email, details: `Deleted ${vehicle.vehicleNumber}`, createdAt: new Date() });
     }
+    webhooks.dispatch('vehicle.deleted', { vehicleNumber: vehicle.vehicleNumber }).catch(() => {});
     res.json({ message: 'Vehicle deleted' });
   } catch (err) {
     res.status(500).json({ message: err.message });

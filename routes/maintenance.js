@@ -3,6 +3,8 @@ const { body, validationResult } = require('express-validator');
 const auth = require('../middleware/auth');
 const MaintenanceLog = require('../models/MaintenanceLog');
 const AuditLog = require('../models/AuditLog');
+const notify = require('../services/notify');
+const webhooks = require('../services/webhooks');
 const router = express.Router();
 
 router.use(auth);
@@ -50,6 +52,15 @@ router.post('/', [
       details: `Maintenance logged for ${log.vehicleNumber}: ${log.type}`, ipAddress: req.ip
     });
     if (req.io) req.io.emit('maintenance:created', log);
+    webhooks.dispatch('maintenance.created', { vehicleNumber: log.vehicleNumber, type: log.type, status: log.status }).catch(() => {});
+    notify.notifyRole('Admin', {
+      title: 'Maintenance logged',
+      body: `${log.vehicleNumber} · ${log.type} · ${log.status}`,
+      type: 'warn',
+      link: '/dashboard.html#maintenance',
+      event: 'maintenance.created',
+      io: req.io
+    }).catch(() => {});
     res.status(201).json({ message: 'Maintenance log created', data: log });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -67,6 +78,7 @@ router.patch('/:id', async (req, res) => {
     Object.assign(log, req.body, { updatedAt: new Date() });
     await log.save();
     if (req.io) req.io.emit('maintenance:updated', log);
+    webhooks.dispatch('maintenance.created', { vehicleNumber: log.vehicleNumber, type: log.type, status: log.status }).catch(() => {});
     res.json({ message: 'Updated', data: log });
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -126,6 +126,8 @@
             <div><label for="bookingDestination">Drop-off address</label><input id="bookingDestination" type="text" placeholder="e.g. 88 Market Ln, Melbourne" autocomplete="off" required /></div>
             <div><label for="bookingZone">Service zone</label><select id="bookingZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
             <div><label for="bookingPriority">Priority</label><select id="bookingPriority"><option value="Standard">Standard</option><option value="Express">Express</option><option value="Priority">Priority</option></select></div>
+            <div><label for="bookingPickupDate">Requested pickup date</label><input id="bookingPickupDate" type="date" /></div>
+            <div style="display:flex;align-items:flex-end;gap:8px;"><button type="button" class="btn btn-secondary btn-sm" id="bookingQuoteBtn">Get estimate</button><span id="bookingQuoteOut" style="font-size:13px;color:var(--text-muted);padding-bottom:8px;"></span></div>
             <div style="grid-column:1/-1;"><label for="bookingNotes">Notes (optional)</label><textarea id="bookingNotes" rows="2"></textarea></div>
             <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;">
               <button type="button" class="btn btn-secondary" id="cancelBookingBtn">Cancel</button>
@@ -167,6 +169,8 @@
             <div><label for="modalBookingDestination">Drop-off address</label><input id="modalBookingDestination" type="text" placeholder="e.g. 88 Market Ln, Melbourne" autocomplete="off" required /></div>
             <div><label for="modalBookingZone">Service zone</label><select id="modalBookingZone"><option value="Central">Central</option><option value="North">North</option><option value="South">South</option><option value="East">East</option><option value="West">West</option><option value="Downtown">Downtown</option></select></div>
             <div><label for="modalBookingPriority">Priority</label><select id="modalBookingPriority"><option value="Standard">Standard</option><option value="Express">Express</option><option value="Priority">Priority</option></select></div>
+            <div><label for="modalBookingPickupDate">Requested pickup date</label><input id="modalBookingPickupDate" type="date" /></div>
+            <div style="display:flex;align-items:flex-end;gap:8px;"><button type="button" class="btn btn-secondary btn-sm" id="modalBookingQuoteBtn">Get estimate</button><span id="modalBookingQuoteOut" style="font-size:13px;color:var(--text-muted);padding-bottom:8px;"></span></div>
             <div style="grid-column:1/-1;display:flex;gap:10px;justify-content:flex-end;"><button type="button" class="btn btn-secondary" id="cancelBookingModalBtn">Cancel</button><button type="submit" class="btn">Create booking</button></div>
           </form>
           <p id="modalBookingMsg" style="margin-top:10px;font-size:13px;color:var(--text-muted);min-height:18px;" role="status" aria-live="polite"></p>

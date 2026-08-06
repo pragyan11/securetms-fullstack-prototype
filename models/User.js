@@ -18,6 +18,24 @@ const UserSchema = new mongoose.Schema({
       transports: [String]
     }],
     default: []
+  },
+
+  // ── Hardening (Phase A) ─────────────────────────────────────────
+  emailVerified: { type: Boolean, default: false },
+  // Account lockout: failed attempts accumulate; once >= LOCKOUT_THRESHOLD
+  // (routes/auth.js) the account rejects further WebAuthn challenges until
+  // lockedUntil passes.
+  failedLoginCount: { type: Number, default: 0 },
+  lockedUntil: { type: Date },
+  lastLoginAt: { type: Date },
+  // One-time recovery codes (SHA-256 hashed; plaintext shown exactly once).
+  recoveryCodes: {
+    type: [{
+      hash: { type: String, required: true },
+      createdAt: { type: Date, default: Date.now },
+      usedAt: { type: Date }
+    }],
+    default: []
   }
 });
 module.exports = mongoose.model('User', UserSchema);

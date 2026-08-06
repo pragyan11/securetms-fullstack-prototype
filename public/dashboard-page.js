@@ -18,7 +18,8 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
   var sortState = { bookings: { field: 'createdAt', order: 'desc' }, shipments: { field: 'updatedAt', order: 'desc' }, fleet: { field: 'updatedAt', order: 'desc' } };
   var pageState = { bookings: 1, shipments: 1, fleet: 1 };
   var activeTab = 'overviewTab';
-  var notifications = [];
+  var notifItems = [], notifUnread = 0;
+  var logActions = [];
   var rowCache = { bookings: {}, shipments: {}, fleet: {}, users: {} };
 
   function clearSkeleton(id) { var el = document.getElementById(id); if (el && el.querySelector) { var sk = el.querySelector('.skeleton'); if (sk) sk.remove(); } }
@@ -115,14 +116,38 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     });
   }
 
-  /* ── Notifications ──────────────────────────────────────────────── */
-  function addNotification(action, source) { notifications.unshift({action:action,source:source,time:new Date().toISOString()}); if (notifications.length>50) notifications.length=50; renderNotifications(); updateNotifBadge(); }
-  function renderNotifications() { var b=document.getElementById('notifBody'); if(!b)return; if(!notifications.length){b.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:24px;">No notifications yet</div>';return;} b.innerHTML=notifications.map(function(n){return'<div class="notif-item"><strong>'+esc(n.action)+'</strong> · '+esc(n.source)+'<div class="notif-time">'+FmtDateT(n.time)+'</div></div>';}).join(''); }
-  function updateNotifBadge() { var bell=document.getElementById('notifBell'); if(!bell)return; if(notifications.length>0){bell.classList.add('has-unread');bell.setAttribute('data-count',Math.min(notifications.length,99));}else bell.classList.remove('has-unread'); }
-  function wireNotifPanel() { var p=document.getElementById('notifPanel'),bd=document.getElementById('notifBackdrop'),bell=document.getElementById('notifBell'),cl=document.getElementById('closeNotifPanel'); if(!p||!bd)return; function o(){p.classList.add('is-open');bd.classList.add('is-open');notifications=[];updateNotifBadge();} function c(){p.classList.remove('is-open');bd.classList.remove('is-open');} if(bell)bell.addEventListener('click',o); if(cl)cl.addEventListener('click',c); bd.addEventListener('click',c); }
+  /* ── Notifications (persisted, B2) ─────────────────────────────── */
+  function renderNotifications() {
+    var b=document.getElementById('notifBody'); if(!b)return;
+    if(!notifItems.length){b.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:24px;">No notifications yet</div>';return;}
+    b.innerHTML=notifItems.map(function(n){
+      return'<div class="notif-item" data-notif-id="'+esc(n._id||'')+'" style="border-left-color:'+(n.type==='error'?'var(--red-600)':n.type==='warn'?'var(--amber-500)':'var(--navy-700)')+';"><strong>'+esc(n.title)+'</strong> · '+esc(n.body||'')+(n.link?'<div style="margin-top:4px;"><a href="'+esc(n.link)+'" style="font-size:11.5px;">View →</a></div>':'')+'<div class="notif-time">'+FmtDateT(n.createdAt||n.time)+'</div></div>';
+    }).join('');
+    b.querySelectorAll('.notif-item').forEach(function(item){
+      item.addEventListener('click', function(){ if(!item.dataset.read){ item.dataset.read='1'; window.api('/api/notifications/read','POST',{ids:[item.dataset.notifId]},true); } });
+    });
+  }
+  function updateNotifBadge() {
+    var bell=document.getElementById('notifBell'); if(!bell)return;
+    if(notifUnread>0){bell.classList.add('has-unread');bell.setAttribute('data-count',Math.min(notifUnread,99));} else bell.classList.remove('has-unread');
+  }
+  async function loadNotifs() {
+    var res=await window.api('/api/notifications?limit=50','GET',null,true).catch(function(){return {data:[],unread:0};});
+    notifItems=(res.data||[]).map(function(n){n.createdAt=n.createdAt||n.time;return n;});
+    notifUnread=res.unread||0;
+    renderNotifications(); updateNotifBadge();
+  }
+  function wireNotifPanel() {
+    var p=document.getElementById('notifPanel'),bd=document.getElementById('notifBackdrop'),bell=document.getElementById('notifBell'),cl=document.getElementById('closeNotifPanel'),mark=document.getElementById('markAllReadBtn');
+    if(!p||!bd)return;
+    function o(){ p.classList.add('is-open');bd.classList.add('is-open'); loadNotifs(); }
+    function c(){ p.classList.remove('is-open');bd.classList.remove('is-open'); }
+    if(bell)bell.addEventListener('click',o); if(cl)cl.addEventListener('click',c); bd.addEventListener('click',c);
+    if(mark)mark.addEventListener('click',async function(){ await window.api('/api/notifications/read','POST',{all:true},true); notifUnread=0; notifItems.forEach(function(n){n.read=true;}); updateNotifBadge(); if(typeof window.notify==='function')window.notify('All notifications marked read',{kind:'success'}); });
+  }
 
   /* ── Tab Navigation ─────────────────────────────────────────────── */
-  var ALL_TABS = ['overviewTab','bookingsTab','shipmentsTab','fleetTab','maintenanceTab','analyticsTab','dispatchTab','mapTab','logsTab','teamTab','invitesTab'];
+  var ALL_TABS = ['overviewTab','bookingsTab','shipmentsTab','fleetTab','maintenanceTab','analyticsTab','dispatchTab','mapTab','logsTab','teamTab','invitesTab','settingsTab'];
   function showTab(name) {
     var link = document.querySelector('.nav-link[data-tab="' + name + '"]');
     if (link) link.click();
@@ -159,6 +184,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     else if (t === 'logsTab') await loadLogs();
     else if (t === 'teamTab') await loadUsers();
     else if (t === 'invitesTab') await loadInvites();
+    else if (t === 'settingsTab') { await loadSettings(); await loadWebhooks(); }
     else if (t === 'mapTab') setTimeout(function() { renderAdminMap(); }, 80);
   }
 
@@ -254,6 +280,9 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
       function(b){return esc(b.origin||'—')+' → '+esc(b.destination||'—');},
       function(b){return '<span class="pill '+pillClass(b.status)+'">'+esc(b.status||'Pending')+'</span>';},
       function(b){return esc(b.serviceZone||'—');},
+      function(b){return '<span class="font-mono" style="font-size:12px;">'+esc(b.invoiceNumber||'—')+'</span>';},
+      function(b){return b.price!=null?'<span style="font-weight:600;">'+esc(b.currency||'')+' '+Number(b.price).toFixed(2)+'</span>':'—';},
+      function(b){return '<span class="pill '+(b.paymentStatus==='Paid'?'is-delivered':b.paymentStatus==='Refunded'?'is-cancelled':'is-pending')+'">'+esc(b.paymentStatus||'Unpaid')+'</span>';},
       function(b){return '<span class="font-mono" style="color:var(--text-muted);font-size:12px;">'+FmtDateT(b.createdAt)+'</span>';},
       function(b){return '<div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-booking" data-id="'+b._id+'" title="Edit">✏️</button><button class="btn btn-ghost btn-sm" data-action="delete-booking" data-id="'+b._id+'" title="Delete">🗑</button></div>';}
     ], { empty: 'No bookings found.' });
@@ -269,24 +298,43 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     document.getElementById('ebDestination').value = b.destination || '';
     document.getElementById('ebStatus').value = b.status || 'Pending';
     document.getElementById('ebZone').value = b.serviceZone || 'Central';
+    document.getElementById('ebPrice').value = b.price != null ? b.price : '';
+    document.getElementById('ebPayment').value = b.paymentStatus || 'Unpaid';
+    document.getElementById('ebPickupDate').value = b.requestedPickupDate ? new Date(b.requestedPickupDate).toISOString().slice(0,10) : '';
+    document.getElementById('ebCancelReason').value = '';
     document.getElementById('editBookingModal').style.display = '';
   }
 
   async function updateBooking(e) {
     e.preventDefault();
     var id = document.getElementById('ebId').value;
+    // Status / payment / reschedule go through the transition-enforcing PATCH.
+    var patch = {};
+    var status = document.getElementById('ebStatus').value;
+    var reason = document.getElementById('ebCancelReason').value.trim();
+    var pickup = document.getElementById('ebPickupDate').value;
+    var payment = document.getElementById('ebPayment').value;
+    if (status) patch.status = status;
+    if (reason) patch.cancelReason = reason;
+    if (pickup) patch.requestedPickupDate = pickup;
+    if (payment) patch.paymentStatus = payment;
+    var patchRes = null;
+    if (Object.keys(patch).length) {
+      patchRes = await window.api('/api/bookings/'+id+'/status', 'PATCH', patch, true);
+      if (patchRes && patchRes.error) { if (typeof window.notify === 'function') window.notify(patchRes.message, { kind: 'error' }); return; }
+    }
     var data = {
       customerName: document.getElementById('ebCustomer').value.trim(),
       origin: document.getElementById('ebOrigin').value.trim(),
       destination: document.getElementById('ebDestination').value.trim(),
-      status: document.getElementById('ebStatus').value,
-      serviceZone: document.getElementById('ebZone').value
+      serviceZone: document.getElementById('ebZone').value,
+      price: document.getElementById('ebPrice').value ? Number(document.getElementById('ebPrice').value) : undefined
     };
     var res = await window.api('/api/bookings/'+id, 'PUT', data, true);
     if (res && res.error) { if (typeof window.notify === 'function') window.notify(res.message, { kind: 'error' }); return; }
     document.getElementById('editBookingModal').style.display = 'none';
     if (typeof window.notify === 'function') window.notify('Booking updated', { kind: 'success' });
-    loadBookings();
+    loadBookings(); loadKPIs();
   }
 
   function createBooking() {
@@ -297,7 +345,23 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     document.getElementById('cbDestination').value = '';
     document.getElementById('cbZone').value = 'Central';
     document.getElementById('cbPriority').value = 'Standard';
+    document.getElementById('cbPickupDate').value = '';
+    var qo = document.getElementById('quoteOutput'); if (qo) qo.textContent = '';
     document.getElementById('createBookingModal').style.display = '';
+  }
+
+  async function getEstimate() {
+    var qo = document.getElementById('quoteOutput'); if (!qo) return;
+    qo.textContent = 'Calculating…';
+    var res = await window.api('/api/bookings/quote', 'POST', {
+      serviceZone: document.getElementById('cbZone').value,
+      priority: document.getElementById('cbPriority').value,
+      origin: document.getElementById('cbOrigin').value.trim(),
+      destination: document.getElementById('cbDestination').value.trim()
+    }, true);
+    if (res && res.error) { qo.textContent = res.message || 'Estimate failed'; qo.style.color = 'var(--red-600)'; return; }
+    qo.textContent = 'Estimate: ' + (res.currency || 'USD') + ' ' + Number(res.price).toFixed(2);
+    qo.style.color = 'var(--green-700, #047857)';
   }
 
   async function handleCreateBooking(e) {
@@ -311,7 +375,8 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
       origin: origin,
       destination: dest,
       serviceZone: document.getElementById('cbZone').value,
-      priority: document.getElementById('cbPriority').value
+      priority: document.getElementById('cbPriority').value,
+      requestedPickupDate: document.getElementById('cbPickupDate').value || undefined
     };
     if (!data.customerEmail) { if (typeof window.notify === 'function') window.notify('Customer email is required so a confirmation can be sent', { kind: 'warn' }); return; }
     var res = await window.api('/api/bookings', 'POST', data, true);
@@ -350,7 +415,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
       function(s){return esc(s.driverName||'—');},
       function(s){return '<span class="pill '+pillClass(s.status)+'">'+esc(s.status)+'</span>';},
       function(s){return esc(s.eta||'—');},
-      function(s){return '<div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-shipment" data-id="'+s._id+'" title="Edit">✏️</button><button class="btn btn-ghost btn-sm" data-action="delete-shipment" data-id="'+s._id+'" title="Delete">🗑</button></div>';}
+      function(s){return '<div style="display:flex;gap:4px;">'+(s.status!=='Delivered'&&s.status!=='Cancelled'?'<button class="btn btn-ghost btn-sm" data-action="assign-shipment" data-id="'+s._id+'" title="Assign driver/vehicle">🚚</button>':'')+'<button class="btn btn-ghost btn-sm" data-action="edit-shipment" data-id="'+s._id+'" title="Edit">✏️</button><button class="btn btn-ghost btn-sm" data-action="delete-shipment" data-id="'+s._id+'" title="Delete">🗑</button></div>';}
     ], { empty: 'No shipments found.' });
     renderPagination('shipmentsPagination', 'shipments', res.total||a.length, res.pages||1, loadShipments);
   }
@@ -367,6 +432,8 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     document.getElementById('esStatus').value = s.status || 'Created';
     document.getElementById('esEta').value = s.eta || '';
     document.getElementById('esLocation').value = s.currentLocation || '';
+    var stopsEl = document.getElementById('esStops');
+    if (stopsEl) stopsEl.value = (s.stops || []).map(function(st){ return st.address; }).join('\n');
     document.getElementById('editShipmentModal').style.display = '';
   }
 
@@ -385,6 +452,13 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     };
     var res = await window.api('/api/shipments/'+id, 'PUT', data, true);
     if (res && res.error) { if (typeof window.notify === 'function') window.notify(res.message, { kind: 'error' }); return; }
+    // Multi-stop route (C4): one address per line in the textarea.
+    var stopsEl = document.getElementById('esStops');
+    var lines = stopsEl ? stopsEl.value.split(/\n+/).map(function(l){return l.trim();}).filter(Boolean) : [];
+    if (lines.length) {
+      var stops = lines.map(function(a, i){ return { address: a, sequence: i + 1 }; });
+      await window.api('/api/shipments/'+id+'/stops', 'PUT', { stops: stops }, true);
+    }
     document.getElementById('editShipmentModal').style.display = 'none';
     if (typeof window.notify === 'function') window.notify('Shipment updated', { kind: 'success' });
     loadShipments();
@@ -457,6 +531,8 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
       function(f){return esc(f.location||'—');},
       function(f){return '<span class="pill '+pillClass(f.status)+'">'+esc(f.status)+'</span>';},
       function(f){return esc(f.serviceZone||'—');},
+      function(f){return (f.odometerKm!=null)?Number(f.odometerKm).toLocaleString()+' km':'—';},
+      function(f){return f.fuelLevel!=null?'<div style="display:flex;align-items:center;gap:6px;"><div style="width:36px;height:6px;border-radius:3px;background:var(--border);overflow:hidden;"><div style="width:'+Math.max(0,Math.min(100,f.fuelLevel))+'%;height:100%;background:'+(f.fuelLevel<20?'var(--red-600)':f.fuelLevel<40?'var(--amber-500)':'var(--green-500)')+';"></div></div><span style="font-size:11px;color:var(--text-muted);">'+Math.round(f.fuelLevel)+'%</span></div>':'—';},
       function(f){return '<div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-vehicle" data-id="'+f._id+'" title="Edit">✏️</button><button class="btn btn-ghost btn-sm" data-action="delete-vehicle" data-id="'+f._id+'" title="Delete">🗑</button></div>';}
     ], { empty: 'No vehicles found.' });
     renderPagination('fleetPagination', 'fleet', res.total||a.length, res.pages||1, loadFleet);
@@ -472,6 +548,9 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     document.getElementById('evLocation').value = v.location || '';
     document.getElementById('evStatus').value = v.status || 'Available';
     document.getElementById('evZone').value = v.serviceZone || 'Central';
+    document.getElementById('evOdo').value = v.odometerKm || 0;
+    document.getElementById('evFuel').value = v.fuelLevel != null ? v.fuelLevel : 100;
+    document.getElementById('evCapacity').value = v.capacityKg || '';
     document.getElementById('editVehicleModal').style.display = '';
   }
 
@@ -484,7 +563,10 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
       driverName: document.getElementById('evDriver').value.trim(),
       location: document.getElementById('evLocation').value.trim(),
       status: document.getElementById('evStatus').value,
-      serviceZone: document.getElementById('evZone').value
+      serviceZone: document.getElementById('evZone').value,
+      odometerKm: document.getElementById('evOdo').value ? Number(document.getElementById('evOdo').value) : 0,
+      fuelLevel: document.getElementById('evFuel').value !== '' ? Number(document.getElementById('evFuel').value) : 100,
+      capacityKg: document.getElementById('evCapacity').value ? Number(document.getElementById('evCapacity').value) : undefined
     };
     var res = await window.api('/api/fleet/'+id, 'PUT', data, true);
     if (res && res.error) { if (typeof window.notify === 'function') window.notify(res.message, { kind: 'error' }); return; }
@@ -506,7 +588,10 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
       driverName: (document.getElementById('avDriver')||{}).value || '',
       location: (document.getElementById('avLocation')||{}).value || '',
       status: (document.getElementById('avStatus')||{}).value || 'Available',
-      serviceZone: (document.getElementById('avZone')||{}).value || 'Central'
+      serviceZone: (document.getElementById('avZone')||{}).value || 'Central',
+      odometerKm: Number((document.getElementById('avOdo')||{}).value || 0),
+      fuelLevel: (document.getElementById('avFuel')||{}).value !== '' && (document.getElementById('avFuel')||{}).value != null ? Number((document.getElementById('avFuel')||{}).value) : 100,
+      capacityKg: Number((document.getElementById('avCapacity')||{}).value || 1000)
     };
     if (!data.vehicleNumber) return;
     var res = await window.api('/api/fleet', 'POST', data, true);
@@ -560,21 +645,63 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
   async function populateMntVehicles() { var sel=document.getElementById('mntVehicle'); if(!sel)return; var res=await window.api('/api/fleet','GET',null,true).catch(function(){return[];}); var a=arr(res); sel.innerHTML=a.map(function(v){return'<option value="'+v._id+'">'+esc(v.vehicleNumber)+' ('+esc(v.vehicleType||'')+')</option>';}).join(''); }
 
   /* ── Analytics, Dispatch, Logs, Users, Invites ──────────────────── */
+  var lastAnalytics = null;
   async function loadAnalytics() {
-    var bstats=await window.api('/api/bookings/stats','GET',null,true).catch(function(){return {byStatus:[],byZone:[],total:0};});
-    var sstats=await window.api('/api/shipments/stats','GET',null,true).catch(function(){return {byStatus:[],total:0};});
+    var days = parseInt((document.getElementById('analyticsPeriod')||{}).value || '30', 10);
+    var to = new Date();
+    var from = new Date(); from.setDate(from.getDate() - days);
+    var iso = function(d){ return d.toISOString().slice(0,10); };
+    var res = await window.api('/api/admin/analytics?from='+iso(from)+'&to='+iso(to),'GET',null,true).catch(function(){return {};});
+    lastAnalytics = res;
     var statsEl=document.getElementById('analyticsStats');
     if(statsEl){
-      var m={}; (sstats.byStatus||[]).forEach(function(s){m[s._id]=s.count;});
-      var del=m['Delivered']||0, transit=(m['In Transit']||0)+(m['Picked Up']||0)+(m['Created']||0), total=sstats.total||0;
-      var onTime=total>0?Math.round((del/total)*100):0;
+      var fmtMoney = function(n){ return (res.currency||'') + ' ' + Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); };
       statsEl.innerHTML=[
-        {label:'Total Shipments',value:total},{label:'Delivered',value:del,trend:'up'},
-        {label:'In Transit',value:transit},{label:'On-Time Rate',value:onTime+'%',trend:onTime>=80?'up':'down'}
+        {label:'Revenue (paid)',value:fmtMoney(res.revenue),trend:(res.revenue||0)>0?'up':''},
+        {label:'Bookings',value:res.bookings||0},
+        {label:'Shipments',value:res.shipments||0},
+        {label:'On-Time Rate',value:(res.onTimeRate||0)+'%',trend:(res.onTimeRate||0)>=80?'up':'down'},
+        {label:'Vehicles',value:res.vehicles||0}
       ].map(function(s){return'<div class="stat-card"><div class="stat-value">'+s.value+'</div><div class="stat-label">'+s.label+'</div>'+(s.trend?'<div class="stat-trend '+s.trend+'">'+(s.trend==='up'?'↑':'↓')+'</div>':'')+'</div>';}).join('');
     }
+    renderDayChart('bookingsDayChart', (res.bookingsByDay||[]).map(function(d){return {label:d.day,value:d.count};}));
+    renderDayChart('revenueDayChart', (res.bookingsByDay||[]).map(function(d){return {label:d.day,value:(d.revenue!=null?d.revenue:0)};}));
+    var bstats=await window.api('/api/bookings/stats','GET',null,true).catch(function(){return {byStatus:[],total:0};});
+    var sstats=await window.api('/api/shipments/stats','GET',null,true).catch(function(){return {byStatus:[],total:0};});
     renderBarChart('bookingsBarChart', bstats.byStatus||[]);
     renderBarChart('shipmentsBarChart', sstats.byStatus||[]);
+    // Top routes + utilisation
+    var tr = document.getElementById('topRoutesOutput');
+    if (tr) {
+      var routes = res.topRoutes||[];
+      tr.innerHTML = routes.length ? routes.map(function(r){return'<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border-soft);font-size:12.5px;"><span>'+esc(r.route)+'</span><span style="color:var(--text-muted);white-space:nowrap;">'+r.count+' · '+fmtMoney(r.revenue)+'</span></div>';}).join('') : '<div style="color:var(--text-muted);font-size:13px;">No routes in this period.</div>';
+    }
+    var ut = document.getElementById('utilizationOutput');
+    if (ut) {
+      var util = res.utilization||[];
+      ut.innerHTML = util.length ? util.map(function(u){return'<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border-soft);font-size:12.5px;"><span class="font-mono">'+esc(u.vehicle)+'</span><span style="color:var(--text-muted);">'+u.shipments+' shipment(s)</span></div>';}).join('') : '<div style="color:var(--text-muted);font-size:13px;">No utilisation data in this period.</div>';
+    }
+  }
+  function renderDayChart(id, data) {
+    var el=document.getElementById(id); if(!el)return;
+    if(!data.length){el.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:20px;">No data</div>';return;}
+    var max=Math.max.apply(null,data.map(function(d){return d.value;}))||1;
+    el.innerHTML=data.map(function(d){var h=Math.max(4,Math.round((d.value/max)*100));return'<div class="bar" style="height:'+h+'px;" title="'+esc(d.label)+': '+d.value+'"><div class="bar-value">'+d.value+'</div><div class="bar-label">'+esc(String(d.label).slice(5))+'</div></div>';}).join('');
+  }
+  function exportAnalyticsCsv() {
+    if (!lastAnalytics) return;
+    var lines = ['Metric,Value'];
+    lines.push('Revenue,' + (lastAnalytics.revenue||0));
+    lines.push('Bookings,' + (lastAnalytics.bookings||0));
+    lines.push('Shipments,' + (lastAnalytics.shipments||0));
+    lines.push('OnTimeRate,' + (lastAnalytics.onTimeRate||0));
+    lines.push(''); lines.push('Day,Bookings');
+    (lastAnalytics.bookingsByDay||[]).forEach(function(d){ lines.push(d.day + ',' + d.count); });
+    lines.push(''); lines.push('Route,Count,Revenue');
+    (lastAnalytics.topRoutes||[]).forEach(function(r){ lines.push('"' + r.route.replace(/"/g,'""') + '",' + r.count + ',' + (r.revenue||0)); });
+    var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'analytics.csv';
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
   }
   function renderBarChart(id, data) { var el=document.getElementById(id); if(!el||!data.length){if(el)el.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:20px;">No data</div>';return;} var max=Math.max.apply(null,data.map(function(d){return d.count;}))||1; el.innerHTML=data.map(function(d){var h=Math.round((d.count/max)*100);return'<div class="bar" style="height:'+h+'px;" title="'+d._id+': '+d.count+'"><div class="bar-value">'+d.count+'</div><div class="bar-label">'+d._id+'</div></div>';}).join(''); }
 
@@ -623,9 +750,12 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
         if (!driverId) return;
         var vehicle = dispatchVehicles.find(function(v){ return v._id === driverId; });
         if (!vehicle || !vehicle.driverName) return;
-        await window.api('/api/shipments/'+data.id+'/status', 'PATCH', { driverName: vehicle.driverName, vehicleNumber: vehicle.vehicleNumber, status: 'Picked Up' }, true);
+        // Server-side dispatch assignment (D3) — validates the driver + vehicle.
+        var res = await window.api('/api/shipments/'+data.id+'/assign', 'POST', { vehicleNumber: vehicle.vehicleNumber }, true);
+        if (res && res.error) { if (typeof window.notify === 'function') window.notify(res.message, { kind: 'error' }); return; }
         if (typeof window.notify === 'function') window.notify('Driver assigned!', { kind: 'success' });
         renderDispatchBoard();
+        loadShipments(); loadKPIs();
       });
     });
   }
@@ -678,18 +808,48 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     doExport(_pendingExportType, from, to);
   }
 
-  async function loadLogs() { var res=await window.api('/api/logs','GET',null,true).catch(function(){return[];}); var a=arr(res).slice(0,100); renderTableRows(document.getElementById('logsOutput'),a,[function(l){return'<span class="font-mono" style="color:var(--text-muted);font-size:12px;white-space:nowrap;">'+FmtDateT(l.createdAt)+'</span>';},function(l){return'<strong>'+esc(l.action)+'</strong>';},function(l){return esc(l.userEmail||'—');},function(l){return esc(l.details||'—');}],{empty:'No logs yet.'}); }
+  async function loadLogs() {
+    var search=(document.getElementById('logsSearch')||{}).value||'';
+    var action=(document.getElementById('logsActionFilter')||{}).value||'';
+    var params='?page='+(pageState.logs||1)+'&limit=25'+(search?'&search='+encodeURIComponent(search):'')+(action?'&action='+encodeURIComponent(action):'');
+    var res=await window.api('/api/logs'+params,'GET',null,true).catch(function(){return {data:[],actions:[]};});
+    var a=arr(res);
+    // Populate the action filter once.
+    if (res.actions && res.actions.length) {
+      var sel=document.getElementById('logsActionFilter');
+      if (sel && !sel.dataset.built) { sel.dataset.built='1'; sel.innerHTML='<option value="">All actions</option>'+res.actions.map(function(x){return '<option value="'+esc(x)+'">'+esc(x)+'</option>';}).join(''); }
+    }
+    renderTableRows(document.getElementById('logsOutput'),a,[
+      function(l){return'<span class="font-mono" style="color:var(--text-muted);font-size:12px;white-space:nowrap;">'+FmtDateT(l.createdAt)+'</span>';},
+      function(l){return'<strong>'+esc(l.action)+'</strong>';},
+      function(l){return esc(l.userEmail||'—');},
+      function(l){return esc(l.details||'—');},
+      function(l){return'<span class="font-mono" style="font-size:11px;color:var(--text-faint);">'+esc(l.ipAddress||'—')+'</span>';}
+    ],{empty:'No logs yet.'});
+    renderPagination('logsPagination','logs',res.total||a.length,res.pages||1,loadLogs);
+  }
+  function exportLogsCsv() {
+    var search=(document.getElementById('logsSearch')||{}).value||'';
+    var action=(document.getElementById('logsActionFilter')||{}).value||'';
+    var qs=''+(search?'?search='+encodeURIComponent(search):'')+(action?((search?'&':'?')+'action='+encodeURIComponent(action)):'');
+    fetch('/api/logs/export'+qs,{headers:{Authorization:'Bearer '+(window.authToken||'')},credentials:'include'}).then(function(r){if(!r.ok){if(typeof window.notify==='function')window.notify('Export failed ('+r.status+')',{kind:'error'});return;}return r.blob();}).then(function(blob){if(!blob)return;var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='audit-logs.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(a.href);}).catch(function(){if(typeof window.notify==='function')window.notify('Export failed',{kind:'error'});});
+  }
   async function loadUsers() {
-    var res = await window.api('/api/admin/users', 'GET', null, true).catch(function(){ return []; });
+    var search=(document.getElementById('usersSearch')||{}).value||'';
+    var role=(document.getElementById('usersRoleFilter')||{}).value||'';
+    var params='?page='+(pageState.users||1)+'&limit=25'+(search?'&search='+encodeURIComponent(search):'')+(role?'&role='+encodeURIComponent(role):'');
+    var res = await window.api('/api/admin/users'+params, 'GET', null, true).catch(function(){ return {data:[]}; });
     var a = arr(res);
     a.forEach(function(u){ rowCache.users[u._id] = u; });
     renderTableRows(document.getElementById('usersOutput'), a, [
       function(u){ return esc(u.name || '—'); },
       function(u){ return esc(u.email); },
       function(u){ return '<span class="pill '+(u.role==='Admin'?'is-info':'is-other')+'">'+esc(u.role)+'</span>'; },
+      function(u){ return u.emailVerified ? '<span class="pill is-delivered" style="font-size:10px;">Verified</span>' : '<span class="pill is-pending" style="font-size:10px;">Unverified</span>'; },
       function(u){ return '<span class="font-mono" style="color:var(--text-muted);font-size:12px;">'+FmtDateT(u.createdAt)+'</span>'; },
       function(u){ var selfId = window.authUser && (window.authUser.id || window.authUser._id); if (selfId && String(u._id) === String(selfId)) return '<span class="pill is-other" style="font-size:11px;">You</span>'; return '<div style="display:flex;gap:4px;"><button class="btn btn-ghost btn-sm" data-action="edit-user" data-id="'+u._id+'" title="Edit">✏️</button><button class="btn btn-ghost btn-sm" data-action="delete-user" data-id="'+u._id+'" title="Delete">🗑</button></div>'; }
     ], { empty: 'No users yet.' });
+    renderPagination('usersPagination','users',res.total||a.length,res.pages||1,loadUsers);
   }
 
   function editUser(id) {
@@ -730,6 +890,92 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
   async function loadInvites() { var res=await window.api('/api/admin/invites','GET',null,true).catch(function(){return[];}); var a=arr(res); var origin=window.location.origin; renderTableRows(document.getElementById('invitesOutput'),a,[function(i){return'<span class="font-mono" style="color:var(--text-muted);font-size:12px;white-space:nowrap;">'+FmtDateT(i.createdAt)+'</span>';},function(i){return'<span class="pill is-info">'+esc(i.role)+'</span>';},function(i){return esc(i.email||'<any>');},function(i){return'<span class="font-mono" style="color:var(--text-muted);font-size:12px;">'+FmtDateT(i.expiresAt)+'</span>';},function(i){return i.used?'<span class="pill is-other">Used</span>':'<span class="pill is-other">Open</span>';},function(i){return i.used?'<span style="color:var(--text-muted);font-size:12px;">'+esc(i.usedByEmail||'')+'</span>':'<input type="text" readonly value="'+origin+'/admin-onboard.html?token='+esc(i.token)+'" class="invite-url-input" style="font-family:var(--font-mono);font-size:11px;height:30px;width:380px;max-width:100%;" />';}],{empty:'No invites yet.'}); }
   async function createInvite() { var email=window.prompt('Optional: lock invite to a specific email.'); var res=await window.api('/api/admin/invites','POST',{email:email||undefined},true); if(res&&res.error){alert('Could not create invite: '+(res.message||'unknown'));return;} await loadInvites(); }
 
+  /* ── Settings (D5) + Webhooks (B3) ────────────────────────────── */
+  async function loadSettings() {
+    var res = await window.api('/api/admin/settings', 'GET', null, true).catch(function(){return {};});
+    if (res.error) return;
+    var q = (res.quote && typeof res.quote === 'object') ? res.quote : {};
+    var set = function(id, v) { var el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+    set('stOrgName', res.orgName);
+    set('stCurrency', res.currency);
+    set('stZones', Array.isArray(res.serviceZones) ? res.serviceZones.join(', ') : '');
+    set('stBaseRate', q.baseRate);
+    set('stRateKm', q.ratePerKm);
+    set('stMultStd', q.priorityMultipliers && q.priorityMultipliers.Standard);
+    set('stMultExp', q.priorityMultipliers && q.priorityMultipliers.Express);
+    set('stMultPri', q.priorityMultipliers && q.priorityMultipliers.Priority);
+  }
+
+  async function saveSettings(e) {
+    e.preventDefault();
+    var msg = document.getElementById('settingsMsg'); if (msg) msg.textContent = 'Saving…';
+    var q = {
+      baseRate: parseFloat((document.getElementById('stBaseRate')||{}).value || '25'),
+      ratePerKm: parseFloat((document.getElementById('stRateKm')||{}).value || '0.9'),
+      priorityMultipliers: {
+        Standard: parseFloat((document.getElementById('stMultStd')||{}).value || '1'),
+        Express: parseFloat((document.getElementById('stMultExp')||{}).value || '1.5'),
+        Priority: parseFloat((document.getElementById('stMultPri')||{}).value || '2')
+      }
+    };
+    var zones = String((document.getElementById('stZones')||{}).value || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
+    var body = { quote: q };
+    if (zones.length) body.serviceZones = zones;
+    var org = (document.getElementById('stOrgName')||{}).value; if (org) body.orgName = org;
+    var cur = (document.getElementById('stCurrency')||{}).value; if (cur) body.currency = cur;
+    var res = await window.api('/api/admin/settings', 'PUT', body, true);
+    if (res && res.error) { if (msg) { msg.textContent = res.message || 'Save failed.'; msg.style.color = 'var(--red-600)'; } return; }
+    if (msg) { msg.textContent = 'Saved ✓'; msg.style.color = 'var(--green-700, #047857)'; }
+    if (typeof window.notify === 'function') window.notify('Settings saved', { kind: 'success' });
+  }
+
+  async function loadWebhooks() {
+    var el = document.getElementById('webhooksList'); if (!el) return;
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">Loading…</div>';
+    var res = await window.api('/api/admin/webhooks', 'GET', null, true).catch(function(){return {data:[]};});
+    var hooks = res.data || [];
+    if (!hooks.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">No webhooks configured.</div>'; return; }
+    el.innerHTML = hooks.map(function(h){
+      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border-soft);">' +
+        '<span class="pill '+(h.enabled?'is-delivered':'is-other')+'" style="font-size:10px;">'+(h.enabled?'On':'Off')+'</span>' +
+        '<div style="flex:1;min-width:0;"><div style="font-size:12.5px;font-weight:600;color:var(--text-hi);word-break:break-all;">'+esc(h.url)+'</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);">'+(h.events||[]).join(', ')+(h.lastStatus?' · last: '+h.lastStatus:'')+'</div></div>' +
+        '<button class="btn btn-ghost btn-sm" data-webhook-del="'+esc(h._id)+'" type="button">✕</button></div>';
+    }).join('');
+    el.querySelectorAll('[data-webhook-del]').forEach(function(btn){
+      btn.addEventListener('click', async function(){
+        await window.api('/api/admin/webhooks/'+btn.dataset.webhookDel, 'DELETE', null, true);
+        loadWebhooks();
+      });
+    });
+  }
+
+  async function handleAddWebhook(e) {
+    e.preventDefault();
+    var msg = document.getElementById('whMsg'); if (msg) msg.textContent = '';
+    var events = String((document.getElementById('whEvents')||{}).value || '').split(',').map(function(s){return s.trim();}).filter(Boolean);
+    var body = {
+      url: (document.getElementById('whUrl')||{}).value.trim(),
+      secret: (document.getElementById('whSecret')||{}).value.trim(),
+      events: events
+    };
+    var res = await window.api('/api/admin/webhooks', 'POST', body, true);
+    if (res && res.error) { if (msg) { msg.textContent = res.message || 'Failed.'; msg.style.color = 'var(--red-600)'; } return; }
+    if (msg) { msg.textContent = 'Webhook added ✓'; msg.style.color = 'var(--green-700, #047857)'; }
+    document.getElementById('whUrl').value = ''; document.getElementById('whSecret').value = ''; document.getElementById('whEvents').value = '';
+    loadWebhooks();
+  }
+
+  /* ── Quick dispatch (D3) — prompt-based assign ─────────────────── */
+  async function assignShipment(id) {
+    var vehicleNumber = prompt('Vehicle number to assign (e.g. TRK-001):');
+    if (vehicleNumber === null) return;
+    var res = await window.api('/api/shipments/'+id+'/assign', 'POST', { vehicleNumber: vehicleNumber.trim() }, true);
+    if (res && res.error) { if (typeof window.notify === 'function') window.notify(res.message, { kind: 'error' }); return; }
+    if (typeof window.notify === 'function') window.notify('Shipment assigned!', { kind: 'success' });
+    loadShipments(); loadKPIs();
+  }
+
   /* ── Live Map + GPS ─────────────────────────────────────────────── */
   var adminMap=null, adminLayers=[], gpsMarkers={};
   async function renderAdminMap() {
@@ -760,18 +1006,19 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
   function bindSocketHandlers(socket) {
     socket.on('connect',function(){try{refreshAll();}catch(_e){}});
     socket.on('disconnect',function(){try{if(typeof window.notify==='function')window.notify('Live connection lost',{kind:'warn',timeoutMs:3000});}catch(_e){}});
-    socket.on('fleet:created',function(){debouncedLoad('fleet',loadFleet);debouncedLoad('kpis',loadKPIs);addNotification('Vehicle added','fleet');});
-    socket.on('fleet:updated',function(){debouncedLoad('fleet',loadFleet);addNotification('Vehicle updated','fleet');});
-    socket.on('fleet:deleted',function(){debouncedLoad('fleet',loadFleet);addNotification('Vehicle removed','fleet');});
-    socket.on('booking:created',function(){debouncedLoad('bookings',loadBookings);debouncedLoad('kpis',loadKPIs);addNotification('Booking created','bookings');});
-    socket.on('booking:updated',function(){debouncedLoad('bookings',loadBookings);addNotification('Booking updated','bookings');});
-    socket.on('shipment:created',function(){debouncedLoad('shipments',loadShipments);debouncedLoad('kpis',loadKPIs);addNotification('Shipment created','shipments');});
-    socket.on('shipment:updated',function(){debouncedLoad('shipments',loadShipments);addNotification('Shipment updated','shipments');});
+    socket.on('fleet:created',function(){debouncedLoad('fleet',loadFleet);debouncedLoad('kpis',loadKPIs);loadNotifs();});
+    socket.on('fleet:updated',function(){debouncedLoad('fleet',loadFleet);loadNotifs();});
+    socket.on('fleet:deleted',function(){debouncedLoad('fleet',loadFleet);loadNotifs();});
+    socket.on('booking:created',function(){debouncedLoad('bookings',loadBookings);debouncedLoad('kpis',loadKPIs);loadNotifs();});
+    socket.on('booking:updated',function(){debouncedLoad('bookings',loadBookings);loadNotifs();});
+    socket.on('shipment:created',function(){debouncedLoad('shipments',loadShipments);debouncedLoad('kpis',loadKPIs);loadNotifs();});
+    socket.on('shipment:updated',function(){debouncedLoad('shipments',loadShipments);loadNotifs();});
     socket.on('activity:new',function(){debouncedLoad('logs',loadLogs);});
-    socket.on('maintenance:created',function(){addNotification('Maintenance logged','maintenance');});
+    socket.on('maintenance:created',function(){ if(typeof window.notify==='function')window.notify('Maintenance logged',{kind:'info'}); });
+    socket.on('notification:new',function(n){ notifItems.unshift(n); notifUnread++; renderNotifications(); updateNotifBadge(); if(typeof window.notify==='function')window.notify(n.title||'Notification',{kind:n.type==='error'?'error':n.type==='warn'?'warn':'info'}); });
     socket.on('gps:update', function(updates) { handleGPSUpdate(updates); });
   }
-  function setupRealtime() { if(typeof window.io!=='function'||socketBound)return; try{adminSocket=window.io({withCredentials:true,transports:['websocket','polling']});bindSocketHandlers(adminSocket);socketBound=true;}catch(e){try{console.warn('[dashboard] socket.io init failed:',e&&e.message);}catch(_e){}} }
+  function setupRealtime() { if(typeof window.io!=='function'||socketBound)return; try{adminSocket=window.io({withCredentials:true,transports:['websocket','polling']});bindSocketHandlers(adminSocket);socketBound=true;adminSocket.on('connect',function(){ var uid=window.authUser&&(window.authUser.id||window.authUser._id); if(uid)adminSocket.emit('join:user',String(uid)); });}catch(e){try{console.warn('[dashboard] socket.io init failed:',e&&e.message);}catch(_e){}} }
 
   /* ── Wire All Buttons ──────────────────────────────────────────── */
   function wireQuickButtons() {
@@ -819,6 +1066,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
       else if (action === 'delete-booking') deleteBooking(id);
       else if (action === 'edit-shipment') editShipment(id);
       else if (action === 'delete-shipment') deleteShipment(id);
+      else if (action === 'assign-shipment') assignShipment(id);
       else if (action === 'edit-vehicle') editVehicle(id);
       else if (action === 'delete-vehicle') deleteVehicle(id);
       else if (action === 'complete-maintenance') completeMaintenance(id);
@@ -836,6 +1084,18 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     var euForm=document.getElementById('editUserForm');if(euForm&&euForm.dataset.bound!=='1'){euForm.dataset.bound='1';euForm.addEventListener('submit',updateUser);}
     var cbForm=document.getElementById('createBookingForm');if(cbForm&&cbForm.dataset.bound!=='1'){cbForm.dataset.bound='1';cbForm.addEventListener('submit',handleCreateBooking);}
     var csForm=document.getElementById('createShipmentForm');if(csForm&&csForm.dataset.bound!=='1'){csForm.dataset.bound='1';csForm.addEventListener('submit',handleCreateShipment);}
+    var stForm=document.getElementById('settingsForm');if(stForm&&stForm.dataset.bound!=='1'){stForm.dataset.bound='1';stForm.addEventListener('submit',saveSettings);}
+    var whForm=document.getElementById('webhookForm');if(whForm&&whForm.dataset.bound!=='1'){whForm.dataset.bound='1';whForm.addEventListener('submit',handleAddWebhook);}
+
+    // Extra header/toolbar buttons
+    main.addEventListener('click',h('quoteBtn',getEstimate));
+    main.addEventListener('click',h('exportLogsBtn',exportLogsCsv));
+    main.addEventListener('click',h('exportAnalyticsBtn',exportAnalyticsCsv));
+    var ap = document.getElementById('analyticsPeriod'); if (ap && !ap.dataset.bound) { ap.dataset.bound='1'; ap.addEventListener('change', loadAnalytics); }
+    var ls = document.getElementById('logsSearch'); if (ls && !ls.dataset.bound) { ls.dataset.bound='1'; ls.addEventListener('input', function(){ pageState.logs=1; loadLogs(); }); }
+    var laf = document.getElementById('logsActionFilter'); if (laf && !laf.dataset.bound) { laf.dataset.bound='1'; laf.addEventListener('change', function(){ pageState.logs=1; loadLogs(); }); }
+    var us = document.getElementById('usersSearch'); if (us && !us.dataset.bound) { us.dataset.bound='1'; us.addEventListener('input', function(){ pageState.users=1; loadUsers(); }); }
+    var urf = document.getElementById('usersRoleFilter'); if (urf && !urf.dataset.bound) { urf.dataset.bound='1'; urf.addEventListener('change', function(){ pageState.users=1; loadUsers(); }); }
   }
 
   /* ── Address Autocomplete ──────────────────────────────────────── */
@@ -871,6 +1131,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     wireSearch('shipmentsSearch','shipmentsStatusFilter',loadShipments);
     wireSearch('fleetSearch','fleetStatusFilter',loadFleet);
     wireSort('bookingsTab','bookings',loadBookings);
+    loadNotifs();
     wireSort('shipmentsTab','shipments',loadShipments);
     wireSort('fleetTab','fleet',loadFleet);
     await refreshAll();setupRealtime();

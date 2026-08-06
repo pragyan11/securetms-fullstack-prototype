@@ -30,10 +30,40 @@
     return '/dashboard.html';
   }
 
+  // ── CSRF token (double-submit cookie, see middleware/csrf.js) ────
+  function getCsrfToken() {
+    const c = document.cookie.split(';').map(s => s.trim()).find(s => s.startsWith('csrf_token='));
+    return c ? c.slice('csrf_token='.length) : '';
+  }
+
+  // ── Refresh-token rotation (E4): exchanges the httpOnly refresh cookie
+  // for a fresh access token, then stores it. Returns true on success. ──
+  async function refreshSession() {
+    try {
+      const r = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
+      if (!r.ok) { persistAuth(''); return false; }
+      const data = await r.json();
+      if (data && data.token) {
+        persistAuth(data.token);
+        if (data.user) authUser = Object.assign({}, authUser || {}, data.user);
+        return true;
+      }
+      return false;
+    } catch (_e) {
+      return false;
+    }
+  }
+
   // ── fetch helper ──────────────────────────────────────────────────
   async function api(path, method = 'GET', body = null, useAuth = false) {
     const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
     if (useAuth && authToken) headers.Authorization = `Bearer ${authToken}`;
+    // CSRF: echo the readable csrf_token cookie on state-changing requests
+    // so cookie-authenticated calls pass the double-submit check.
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+      const csrf = getCsrfToken();
+      if (csrf) headers['X-CSRF-Token'] = csrf;
+    }
     const options = { method, headers, credentials: 'include' };
     if (body !== null) options.body = JSON.stringify(body);
     try {
@@ -41,6 +71,15 @@
       const isJson = (res.headers.get('content-type') || '').includes('application/json');
       const data = isJson ? await res.json() : await res.text();
       if (!res.ok) {
+        // Expired access token → silently refresh once and retry (E4).
+        if (res.status === 401 && useAuth && !options._retried && !path.startsWith('/api/auth/refresh')) {
+          const refreshed = await refreshSession();
+          if (refreshed) {
+            options._retried = true;
+            if (authToken) options.headers.Authorization = `Bearer ${authToken}`;
+            return api(path, method, body, useAuth);
+          }
+        }
         const message = (isJson && data && (data.message || data.error)) ||
                         (typeof data === 'string' && data) ||
                         ('HTTP ' + res.status);
@@ -114,6 +153,16 @@
         }
       }
       return true;
+    }
+
+    // Token invalid → try refresh-token rotation once, then re-check the
+    // bearer path before giving up (handles long-lived cookie sessions).
+    if (!r.ok && !authToken) {
+      const refreshed = await refreshSession();
+      if (refreshed && authToken) {
+        const retry = await tryCall('Bearer ' + authToken);
+        if (retry.ok) r = retry;
+      }
     }
 
     // Token invalid → wipe the local copy so we don't loop on next page load.
@@ -328,12 +377,8 @@
   }
 
   async function recoverAccount() {
-    const email = document.getElementById('loginEmail')?.value.trim() || '';
-    const recoveryEmail = prompt('Enter recovery email');
-    const msg = document.getElementById('loginMsg');
-    if (!email || !recoveryEmail) { if (msg) msg.textContent = 'Recovery cancelled.'; return; }
-    const res = await api('/api/auth/recover', 'POST', { email, recoveryEmail }, false);
-    if (msg) msg.textContent = res.message || 'Recovery request processed.';
+    // Dedicated recovery page handles the full flow (email link + codes).
+    window.location.href = '/recover.html';
   }
 
   // ── Wire common UI elements ───────────────────────────────────────
@@ -608,6 +653,8 @@
   window.verifyAuth = verifyAuth;
   window.requireAuth = requireAuth;
   window.api = api;
+  window.refreshSession = refreshSession;
+  window.getCsrfToken = getCsrfToken;
   window.redirectToDashboard = redirectToDashboard;
   window.logoutUser = logoutUser;
   window.loginUser = loginUser;

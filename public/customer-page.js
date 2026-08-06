@@ -14,6 +14,7 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
   const initials = S.initials  || ((s) => (s || 'CU').split(/\s+/).map(p => p && p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase());
 
   let currentRatingShipmentId = null;
+  let lastBookings = []; // cache so cancel/reschedule buttons can find their row
 
   /* ── Theme Toggle ──────────────────────────────────────────────── */
   function initTheme() {
@@ -119,13 +120,51 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
     loadDeliveries(true);
   }
 
-  /* ── Share Tracking ─────────────────────────────────────────────── */
+  /* ── Share Tracking (now points at the public /track page, C10) ── */
   function shareTracking(trackingId) {
-    const url = window.location.origin + '/customer.html?track=' + encodeURIComponent(trackingId);
+    const url = window.location.origin + '/track.html?trackingId=' + encodeURIComponent(trackingId);
     navigator.clipboard.writeText(url).then(() => {
       const toast = document.getElementById('copyToast');
       if (toast) { toast.classList.add('show'); setTimeout(() => toast.classList.remove('show'), 2000); }
     }).catch(() => { window.prompt('Copy this tracking link:', url); });
+  }
+
+  /* ── Booking lifecycle (C5): cancel / reschedule ───────────────── */
+  async function cancelBooking(id) {
+    const b = lastBookings.find(x => String(x._id) === String(id));
+    if (!b || b.status === 'Cancelled' || b.status === 'Completed') return;
+    const reason = window.prompt('Reason for cancelling this booking? (required)');
+    if (reason === null) return;
+    if (!reason.trim()) { if (typeof window.notify === 'function') window.notify('A cancel reason is required', { kind: 'warn' }); return; }
+    const res = await window.api('/api/bookings/' + id + '/status', 'PATCH', { status: 'Cancelled', cancelReason: reason.trim() }, true);
+    if (res && res.error) { if (typeof window.notify === 'function') window.notify(res.message, { kind: 'error' }); return; }
+    if (typeof window.notify === 'function') window.notify('Booking cancelled', { kind: 'success' });
+    loadDeliveries(true);
+  }
+  async function rescheduleBooking(id) {
+    const b = lastBookings.find(x => String(x._id) === String(id));
+    if (!b || b.status === 'Cancelled' || b.status === 'Completed') return;
+    const date = window.prompt('New requested pickup date (YYYY-MM-DD):', b.requestedPickupDate ? new Date(b.requestedPickupDate).toISOString().slice(0, 10) : '');
+    if (date === null || !date.trim()) return;
+    const res = await window.api('/api/bookings/' + id + '/status', 'PATCH', { status: 'Rescheduled', requestedPickupDate: date.trim(), rescheduleReason: 'Requested by customer' }, true);
+    if (res && res.error) { if (typeof window.notify === 'function') window.notify(res.message, { kind: 'error' }); return; }
+    if (typeof window.notify === 'function') window.notify('Booking rescheduled', { kind: 'success' });
+    loadDeliveries(true);
+  }
+
+  /* ── Quote estimate (C3) ───────────────────────────────────────── */
+  async function getBookingEstimate(zoneElId, prioElId, originElId, destElId, outId) {
+    const out = document.getElementById(outId); if (!out) return;
+    out.textContent = 'Calculating…';
+    const res = await window.api('/api/bookings/quote', 'POST', {
+      serviceZone: document.getElementById(zoneElId)?.value || 'Central',
+      priority: document.getElementById(prioElId)?.value || 'Standard',
+      origin: document.getElementById(originElId)?.value.trim() || '',
+      destination: document.getElementById(destElId)?.value.trim() || ''
+    }, true);
+    if (res && res.error) { out.textContent = res.message || 'Estimate failed'; out.style.color = 'var(--red-600)'; return; }
+    out.textContent = 'Estimate: ' + (res.currency || 'USD') + ' ' + Number(res.price).toFixed(2);
+    out.style.color = 'var(--green-700, #047857)';
   }
 
   /* ── Load Deliveries ───────────────────────────────────────────── */
@@ -149,6 +188,7 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
     ]);
     const bArr = Array.isArray(bookings) ? bookings : (bookings.data) || [];
     const sArr = Array.isArray(shipments) ? shipments : (shipments.data) || [];
+    lastBookings = bArr;
 
     const byBooking = new Map();
     sArr.forEach(s => { if (s && s.bookingId) byBooking.set(String(s.bookingId), s); });
@@ -192,10 +232,19 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
             ${cell('Current loc.', shipment && shipment.currentLocation)}
             ${cell('ETA', shipment && shipment.eta)}
             ${cell('Tracking ID', trackingSafe, { mono: true })}
+            ${cell('Invoice', b.invoiceNumber, { mono: true })}
+            ${cell('Price', b.price != null ? ((b.currency||'USD') + ' ' + Number(b.price).toFixed(2)) : '—', { bold: true })}
+            ${cell('Payment', b.paymentStatus || 'Unpaid')}
           </div>
+          ${shipment && shipment.stops && shipment.stops.length ? `
+            <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border-soft);">
+              <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:6px;">Route stops</div>
+              ${shipment.stops.map(st => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12.5px;"><span style="width:18px;height:18px;border-radius:50%;background:${st.status === 'Visited' ? 'var(--green-500)' : st.status === 'Skipped' ? 'var(--red-600)' : 'var(--border-strong)'};color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;">${st.sequence || '•'}</span><span style="color:var(--text-muted);">${esc(st.address)}</span>${st.status === 'Visited' ? '<span class="pill is-delivered" style="font-size:10px;">✓</span>' : ''}</div>`).join('')}
+            </div>` : ''}
           ${shipment ? renderRating(shipment) : ''}
           <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
             ${shipment ? `<button class="btn btn-secondary btn-sm share-btn" onclick="window.customerPage.shareTracking('${esc(shipment.trackingId)}')"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share</button>` : ''}
+            ${(b.status === 'Pending' || b.status === 'Confirmed') ? `<button class="btn btn-ghost btn-sm" data-action="cancel-booking" data-id="${esc(b._id)}">Cancel booking</button><button class="btn btn-ghost btn-sm" data-action="reschedule-booking" data-id="${esc(b._id)}">Reschedule</button>` : ''}
             ${shipment && shipment.status === 'Delivered' && shipment.podSignature ? '<span class="pill is-delivered">✓ POD Signed</span>' : ''}
           </div>
         </article>`;
@@ -270,6 +319,10 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
         else if (t.closest('#cancelMsgBtn')) { document.getElementById('msgCompose').style.display = 'none'; }
         else if (t.closest('#sendMsgBtn')) sendMessage();
         else if (t.closest('#submitRating')) submitRating();
+        else if (t.closest('#bookingQuoteBtn')) getBookingEstimate('bookingZone','bookingPriority','bookingOrigin','bookingDestination','bookingQuoteOut');
+        else if (t.closest('#modalBookingQuoteBtn')) getBookingEstimate('modalBookingZone','modalBookingPriority','modalBookingOrigin','modalBookingDestination','modalBookingQuoteOut');
+        else if (t.closest('[data-action="cancel-booking"]')) { const el = t.closest('[data-action="cancel-booking"]'); cancelBooking(el.dataset.id); }
+        else if (t.closest('[data-action="reschedule-booking"]')) { const el = t.closest('[data-action="reschedule-booking"]'); rescheduleBooking(el.dataset.id); }
       });
     }
 
@@ -296,7 +349,8 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
           destination: (document.getElementById('bookingDestination')?.value || '').trim(),
           serviceZone: document.getElementById('bookingZone')?.value || 'Central',
           priority: document.getElementById('bookingPriority')?.value || 'Standard',
-          notes: document.getElementById('bookingNotes')?.value || ''
+          notes: document.getElementById('bookingNotes')?.value || '',
+          requestedPickupDate: document.getElementById('bookingPickupDate')?.value || undefined
         };
         if (!payload.origin || !payload.destination) { bookingMsg.style.color = 'var(--red-600)'; bookingMsg.textContent = 'Pickup and drop-off addresses are required.'; return; }
         if (!payload.customerEmail) { bookingMsg.style.color = 'var(--red-600)'; bookingMsg.textContent = 'Email is required so we can send your confirmation.'; return; }
@@ -314,7 +368,8 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
           origin: (document.getElementById('modalBookingOrigin')?.value || '').trim(),
           destination: (document.getElementById('modalBookingDestination')?.value || '').trim(),
           serviceZone: document.getElementById('modalBookingZone')?.value || 'Central',
-          priority: document.getElementById('modalBookingPriority')?.value || 'Standard'
+          priority: document.getElementById('modalBookingPriority')?.value || 'Standard',
+          requestedPickupDate: document.getElementById('modalBookingPickupDate')?.value || undefined
         };
         if (!payload.origin || !payload.destination) { modalMsg.style.color = 'var(--red-600)'; modalMsg.textContent = 'Pickup and drop-off addresses are required.'; return; }
         if (!payload.customerEmail) { modalMsg.style.color = 'var(--red-600)'; modalMsg.textContent = 'Email is required so we can send your confirmation.'; return; }
@@ -395,6 +450,8 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
       try {
         customerSocket = window.io({ withCredentials: true, transports: ['websocket', 'polling'] });
         customerTrack.bindSocket(customerSocket);
+        customerSocket.on('connect', () => { const uid = window.authUser && (window.authUser.id || window.authUser._id); if (uid) customerSocket.emit('join:user', String(uid)); });
+        customerSocket.on('notification:new', (n) => { if (typeof window.notify === 'function') window.notify(n.title || 'Notification', { kind: n.type === 'error' ? 'error' : n.type === 'warn' ? 'warn' : 'info' }); if (n.link && n.link.indexOf('customer') > -1) loadDeliveries(false); });
         customerSocket.on('disconnect', () => {});
       } catch (_e) {}
     }
@@ -431,4 +488,6 @@ in-app messaging, dark mode, live map, 30s auto-refresh.
   window.customerPage.loadDeliveries = loadDeliveries;
   window.customerPage.initCustomerMap = initCustomerMap;
   window.customerPage.shareTracking = shareTracking;
+  window.customerPage.cancelBooking = cancelBooking;
+  window.customerPage.rescheduleBooking = rescheduleBooking;
 })();
