@@ -240,7 +240,15 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     var results = await Promise.allSettled([window.api('/api/bookings/stats','GET',null,true), window.api('/api/shipments/stats','GET',null,true), window.api('/api/fleet?limit=1','GET',null,true), window.api('/api/admin/dashboard','GET',null,true)]);
     var setNum = function(id, n) { var e = document.getElementById(id); if (e) { clearSkeleton(id); e.textContent = (typeof n==='number'&&!isNaN(n)) ? n : '—'; } };
     if(results[0].status==='fulfilled') setNum('kpiBookingsValue', results[0].value.total); else { clearSkeleton('kpiBookingsValue'); setTileError('kpiBookingsValue','Bookings unavailable'); }
-    if(results[1].status==='fulfilled') setNum('kpiShipmentsValue', results[1].value.total); else { clearSkeleton('kpiShipmentsValue'); setTileError('kpiShipmentsValue','Shipments unavailable'); }
+    if(results[1].status==='fulfilled') {
+      var st = results[1].value || {};
+      var e = document.getElementById('kpiShipmentsValue');
+      if (e) {
+        clearSkeleton('kpiShipmentsValue');
+        e.textContent = (typeof st.active==='number'&&!isNaN(st.active)) ? st.active : ((typeof st.total==='number') ? st.total : '—');
+        e.title = 'Active: ' + ((st.active!=null)?st.active:'—') + ' · In transit: ' + ((st.inTransit!=null)?st.inTransit:'—') + ' · Total: ' + ((st.total!=null)?st.total:'—');
+      }
+    } else { clearSkeleton('kpiShipmentsValue'); setTileError('kpiShipmentsValue','Shipments unavailable'); }
     if(results[2].status==='fulfilled') setNum('kpiFleetValue', results[2].value.total || arr(results[2].value).length); else { clearSkeleton('kpiFleetValue'); setTileError('kpiFleetValue','Fleet unavailable'); }
     if(results[3].status==='fulfilled') setNum('kpiUsersValue', (results[3].value&&results[3].value.users!=null)?results[3].value.users:'—'); else { clearSkeleton('kpiUsersValue'); setTileError('kpiUsersValue','Users unavailable'); }
   }
@@ -252,7 +260,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     var ba=arr(b), sa=arr(s), fa=arr(f);
     function col(title,items,fmt) { return '<div style="background:var(--bg-card);border:1px solid var(--border-soft);border-radius:12px;padding:14px;"><div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">'+esc(title)+' ('+items.length+')</div>'+(items.length===0?'<div style="font-size:13px;color:var(--text-muted);">No items.</div>':items.slice(0,8).map(fmt).join(''))+'</div>'; }
     var html = col('Pending bookings', ba.filter(function(x){return x.status==='Pending';}), function(b){return'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-soft);font-size:13px;"><span>'+esc(b.customerName||'—')+'</span><span style="color:var(--text-muted);">'+esc(b.origin||'')+' → '+esc(b.destination||'')+'</span></div>';})
-      + col('In transit', sa.filter(function(x){return x.status==='In Transit'||x.status==='Picked Up';}), function(x){return'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-soft);font-size:13px;"><span class="font-mono">'+esc(x.trackingId)+'</span><span style="color:var(--text-muted);">'+esc(x.driverName||'')+' · '+esc(x.currentLocation||'')+'</span></div>';})
+      + col('Active shipments', sa.filter(function(x){ return x.status && x.status!=='Delivered' && x.status!=='Cancelled'; }), function(x){return'<div style="padding:7px 0;border-bottom:1px solid var(--border-soft);"><div style="display:flex;align-items:center;gap:8px;font-size:13px;"><span class="font-mono" style="font-size:12px;">'+esc(x.trackingId||'—')+'</span><span class="pill '+pillClass(x.status)+'" style="font-size:10.5px;margin-left:auto;">'+esc(x.status||'')+'</span></div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">'+esc(x.vehicleNumber||x.driverName||'Unassigned')+' · '+esc(x.currentLocation||x.pickupAddress||'Awaiting pickup')+'</div></div>';})
       + col('Fleet status', fa, function(x){return'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-soft);font-size:13px;"><span>'+esc(x.vehicleNumber)+'</span><span class="pill '+pillClass(x.status)+'" style="font-size:11px;">'+esc(x.status)+'</span></div>';});
     var ov=document.getElementById('overviewOutput'); if(ov){ov.className='';ov.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;">'+html+'</div>';}
   }

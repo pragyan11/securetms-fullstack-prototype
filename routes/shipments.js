@@ -63,27 +63,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Single shipment (role-scoped)
-router.get('/:id', async (req, res) => {
-  try {
-    const shipment = await Shipment.findById(req.params.id);
-    if (!shipment) return res.status(404).json({ message: 'Shipment not found' });
-    if (req.user.role === 'Customer') {
-      const bookingIds = await Booking.find({ userId: req.user.id }).distinct('_id');
-      if (!shipment.bookingId || !bookingIds.map(String).includes(String(shipment.bookingId))) {
-        return res.status(403).json({ message: 'Forbidden' });
-      }
-    } else if (req.user.role === 'Driver') {
-      if (shipment.driverEmail !== req.user.email && shipment.driverName !== req.user.name) {
-        return res.status(403).json({ message: 'Forbidden' });
-      }
-    }
-    res.json(shipment);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
 // Export CSV (optionally filtered by from/to date range)
 router.get('/export', async (req, res) => {
   try {
@@ -124,7 +103,37 @@ router.get('/stats', async (req, res) => {
       Shipment.countDocuments(filter),
       Shipment.aggregate([{ $match: filter }, { $group: { _id: '$status', count: { $sum: 1 } } }])
     ]);
-    res.json({ total, byStatus });
+    const counts = {};
+    (byStatus || []).forEach(g => { counts[g._id] = g.count; });
+    const terminal = (counts['Delivered'] || 0) + (counts['Cancelled'] || 0);
+    res.json({
+      total,
+      active: Math.max(0, total - terminal),
+      inTransit: (counts['In Transit'] || 0) + (counts['Picked Up'] || 0),
+      byStatus
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Single shipment (role-scoped) — deliberately defined AFTER /export and
+// /stats so those literal paths aren't swallowed by this :id route.
+router.get('/:id', async (req, res) => {
+  try {
+    const shipment = await Shipment.findById(req.params.id);
+    if (!shipment) return res.status(404).json({ message: 'Shipment not found' });
+    if (req.user.role === 'Customer') {
+      const bookingIds = await Booking.find({ userId: req.user.id }).distinct('_id');
+      if (!shipment.bookingId || !bookingIds.map(String).includes(String(shipment.bookingId))) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+    } else if (req.user.role === 'Driver') {
+      if (shipment.driverEmail !== req.user.email && shipment.driverName !== req.user.name) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+    }
+    res.json(shipment);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
