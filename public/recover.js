@@ -36,9 +36,12 @@
     }
     const optsRes = await window.api('/api/auth/webauthn/register/options', 'POST', { email }, false);
     if (optsRes.error) throw new Error(optsRes.message || 'Could not start passkey setup');
+    // Pin to the on-device authenticator (Windows Hello / PIN / face) so the
+    // browser never asks to insert a USB security key.
+    if (window.forcePlatformAuthenticator) window.forcePlatformAuthenticator(optsRes);
     let att;
     try {
-      att = await SimpleWebAuthnBrowser.startRegistration(optsRes);
+      att = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: optsRes });
     } catch (e) {
       throw new Error('Passkey registration failed: ' + (e.message || e));
     }

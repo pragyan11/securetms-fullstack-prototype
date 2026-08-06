@@ -231,6 +231,35 @@
     });
   }
 
+  /**
+   * Pin the ceremony to the on-device authenticator (Windows Hello / Touch ID
+   * / Face ID / device PIN) so the browser never falls back to a USB
+   * security-key prompt.
+   *
+   * Chrome treats authenticatorAttachment 'platform' as a strong preference,
+   * but a 'usb' transport hint or a non-resident key can still push the flow
+   * toward the "Insert your security key" dialog. Forcing residentKey
+   * 'required' guarantees a discoverable on-device passkey, and pinning the
+   * transports to 'internal' makes the Windows chooser offer Windows Hello
+   * only. Applied to both registration and login options before they reach
+   * SimpleWebAuthn.
+   */
+  function forcePlatformAuthenticator(opts) {
+    if (!opts || typeof opts !== 'object') return opts;
+    opts.authenticatorSelection = {
+      authenticatorAttachment: 'platform',
+      residentKey: 'required',
+      requireResidentKey: true,
+      userVerification: 'required'
+    };
+    // Login: only advertise the on-device transport so the Windows device
+    // chooser shows Windows Hello and not a USB security key.
+    if (Array.isArray(opts.allowCredentials)) {
+      opts.allowCredentials.forEach(c => { if (c && typeof c === 'object') c.transports = ['internal']; });
+    }
+    return opts;
+  }
+
   /** Registers the new account's passkey and returns the server's verified payload. */
   async function registerPasskey() {
     if (!checkWebAuthnOrigin()) throw new Error('WebAuthn origin unsupported on this address');
@@ -239,8 +268,9 @@
     const optsRes = await api('/api/auth/webauthn/register/options', 'POST', { email }, false);
     if (optsRes.error) throw new Error(optsRes.message || 'Failed to get registration options');
     await ensureSimpleWebAuthnBrowser();
+    forcePlatformAuthenticator(optsRes);
     let att;
-    try { att = await SimpleWebAuthnBrowser.startRegistration(optsRes); }
+    try { att = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: optsRes }); }
     catch (e) { throw new Error('Passkey registration failed: ' + e.message); }
     const verify = await api('/api/auth/webauthn/register', 'POST', { email, attestationResponse: att }, false);
     if (verify.error || !verify.verified) throw new Error(verify.message || 'Server verification failed');
@@ -256,8 +286,9 @@
     const optsRes = await api('/api/auth/webauthn/login/options', 'POST', { email }, false);
     if (optsRes.error) throw new Error(optsRes.message || 'Failed to get login options');
     await ensureSimpleWebAuthnBrowser();
+    forcePlatformAuthenticator(optsRes);
     let assertion;
-    try { assertion = await SimpleWebAuthnBrowser.startAuthentication(optsRes); }
+    try { assertion = await SimpleWebAuthnBrowser.startAuthentication({ optionsJSON: optsRes }); }
     catch (e) { throw new Error('Passkey authentication failed: ' + e.message); }
     const verify = await api('/api/auth/webauthn/login', 'POST', { email, assertionResponse: assertion }, false);
     if (verify.error || !verify.verified) throw new Error(verify.message || 'Login verification failed');
@@ -287,8 +318,9 @@
     const optsRes = await api('/api/auth/webauthn/register/options', 'POST', { email }, false);
     if (optsRes.error) throw new Error(optsRes.message || 'Account not found — create one with Register first');
     await ensureSimpleWebAuthnBrowser();
+    forcePlatformAuthenticator(optsRes);
     let att;
-    try { att = await SimpleWebAuthnBrowser.startRegistration(optsRes); }
+    try { att = await SimpleWebAuthnBrowser.startRegistration({ optionsJSON: optsRes }); }
     catch (e) { throw new Error('Passkey setup failed: ' + e.message); }
     const verify = await api('/api/auth/webauthn/register', 'POST', { email, attestationResponse: att }, false);
     if (verify.error || !verify.verified) throw new Error(verify.message || 'Server verification failed');
@@ -663,6 +695,7 @@
   window.registerPasskey = registerPasskey;
   window.loginPasskey = loginPasskey;
   window.setupPasskey = setupPasskey;
+  window.forcePlatformAuthenticator = forcePlatformAuthenticator;
   window.dashboardForRole = dashboardForRole;
   window.geocodeAddress = geocodeAddress;
   window.setupAddressAutocomplete = setupAddressAutocomplete;

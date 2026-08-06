@@ -409,6 +409,17 @@ async function getOrCreateChallenge(email, type) {
   const user = await User.findOne({ email });
   if (!user) throw new Error('User not found');
 
+  // Platform-only passkeys (Windows Hello / Touch ID / face / device PIN).
+  // authenticatorAttachment 'platform' + residentKey 'required' makes the
+  // browser create a discoverable on-device passkey. Transport hints are
+  // pinned to 'internal' so Chrome's Windows chooser offers Windows Hello
+  // instead of prompting to insert a USB security key.
+  const toCredential = cred => ({
+    id: cred.credentialID.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+    type: 'public-key',
+    transports: (cred.transports && cred.transports.length) ? cred.transports : ['internal']
+  });
+
   let options;
   if (type === 'register') {
     options = await generateRegistrationOptions({
@@ -417,8 +428,13 @@ async function getOrCreateChallenge(email, type) {
       userName: user.email,
       timeout: 60000,
       attestationType: 'none',
-      excludeCredentials: (user.credentials || []).map(cred => ({ id: cred.credentialID.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''), type: 'public-key', transports: cred.transports || ['usb', 'ble', 'nfc', 'internal'] })),
-      authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'preferred', userVerification: 'required' }
+      excludeCredentials: (user.credentials || []).map(toCredential),
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform',
+        residentKey: 'required',
+        requireResidentKey: true,
+        userVerification: 'required'
+      }
     });
   } else {
     if (!user.credentials || user.credentials.length === 0) {
@@ -426,7 +442,7 @@ async function getOrCreateChallenge(email, type) {
     }
     options = await generateAuthenticationOptions({
       timeout: 60000, rpID,
-      allowCredentials: (user.credentials || []).map(cred => ({ id: cred.credentialID.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''), type: 'public-key', transports: cred.transports || ['usb', 'ble', 'nfc', 'internal'] })),
+      allowCredentials: (user.credentials || []).map(toCredential),
       userVerification: 'required'
     });
   }
