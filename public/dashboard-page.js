@@ -185,7 +185,7 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
     else if (t === 'teamTab') await loadUsers();
     else if (t === 'invitesTab') await loadInvites();
     else if (t === 'settingsTab') { await loadSettings(); await loadWebhooks(); }
-    else if (t === 'mapTab') setTimeout(function() { renderAdminMap(); }, 80);
+    else if (t === 'mapTab') setTimeout(function() { initAdminMap(); }, 80);
   }
 
   var _dt = {};
@@ -977,29 +977,172 @@ live GPS map, socket.io real-time, drag-and-drop dispatch board.
   }
 
   /* ── Live Map + GPS ─────────────────────────────────────────────── */
-  var adminMap=null, adminLayers=[], gpsMarkers={};
-  async function renderAdminMap() {
-    var c=document.getElementById('liveMap'); if(!c||typeof window.L==='undefined')return;
-    if(!adminMap){adminMap=window.L.map('liveMap').setView([0,0],2);window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap',maxZoom:19}).addTo(adminMap);}else adminMap.invalidateSize();
-    adminLayers.forEach(function(l){adminMap.removeLayer(l);});adminLayers=[];
-    async function locate(text){if(!text||text.length<3)return null;try{var r=await fetch('/api/geocode/search?q='+encodeURIComponent(text)+'&limit=1');var j=await r.json();if(j&&j.length)return[parseFloat(j[0].lat),parseFloat(j[0].lon)];}catch(_e){}return null;}
-    var res=await window.api('/api/bookings?limit=50','GET',null,true).catch(function(){return{};});var a=arr(res);var pts=[];
-    for(var i=0;i<a.length;i++){var b=a[i];var o=await locate(b.origin),d=await locate(b.destination);
-      if(o){var m=window.L.circleMarker(o,{radius:7,color:'#0F4C81',fillColor:'#0F4C81',fillOpacity:0.85}).addTo(adminMap);m.bindPopup('<strong>Pickup</strong><br>'+esc(b.origin||''));adminLayers.push(m);pts.push(o);}
-      if(d){var m2=window.L.circleMarker(d,{radius:7,color:'#FF6B35',fillColor:'#FF6B35',fillOpacity:0.85}).addTo(adminMap);m2.bindPopup('<strong>Drop-off</strong><br>'+esc(b.destination||''));adminLayers.push(m2);pts.push(d);if(o)adminLayers.push(window.L.polyline([o,d],{color:'#0F4C81',weight:2,dashArray:'4 6',opacity:0.6}).addTo(adminMap));}
+  /* ── Admin live map (professional fleet view) ───────────────────
+     The old implementation re-geocoded every booking and rebuilt every layer
+     on each 5s GPS tick, which made markers flicker and jump. Now the map and
+     route lines are drawn once, and GPS updates only glide the vehicle
+     markers — smooth, like real fleet tracking. */
+  var adminMap = null;
+  var adminRoutesDrawn = false;
+  var adminVehicleLayers = {}; // vehicleNumber -> { marker }
+  var adminRouteLines = [];
+  var adminAnim = {};          // vehicleNumber -> { from, to, start }
+  var adminAnimId = null;
+  var _adminMapCssInjected = false;
+
+  function injectAdminMapCSS() {
+    if (_adminMapCssInjected) return;
+    _adminMapCssInjected = true;
+    var s = document.createElement('style');
+    s.textContent = [
+      '.adm-truck{display:block;filter:drop-shadow(0 2px 3px rgba(15,23,42,0.4));transition:transform 0.5s ease;}',
+      '.adm-truck svg{display:block;}',
+      '.adm-ping{position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;border:2.5px solid rgba(16,185,129,0.75);animation:adm-ping 1.7s ease-out infinite;pointer-events:none;}',
+      '.adm-ping.parked{border-color:rgba(100,116,139,0.55);animation:none;}',
+      '@keyframes adm-ping{0%{transform:scale(0.35);opacity:1}100%{transform:scale(1.7);opacity:0}}',
+      '.adm-legend{background:rgba(255,255,255,0.93);border:1px solid var(--border,#DDE2EC);border-radius:10px;padding:8px 11px;font-size:11px;color:var(--text,#1F2937);box-shadow:0 6px 18px rgba(15,23,42,0.14);line-height:1.75;}',
+      'body.dark .adm-legend{background:rgba(30,41,59,0.93);border-color:#334155;color:#E2E8F0;}',
+      '.adm-legend b{display:block;margin-bottom:2px;}',
+      '.adm-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:-1px;}'
+    ].join('');
+    document.head.appendChild(s);
+  }
+
+  function adminTruckIcon(heading, moving) {
+    var h = Math.round(heading || 0);
+    var ping = moving ? '<span class="adm-ping"></span>' : '<span class="adm-ping parked"></span>';
+    return window.L.divIcon({
+      className: '',
+      html: '<div class="adm-truck" style="transform:rotate(' + h + 'deg)">' +
+        '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+        '<rect x="1" y="6" width="13" height="10" rx="1.2" fill="#0F4C81" stroke="#0F4C81"/>' +
+        '<path d="M14 9h4l3 3v4h-7z" fill="#FF6B35" stroke="#FF6B35"/>' +
+        '<circle cx="6.5" cy="17.5" r="1.8" fill="#fff" stroke="#0F4C81" stroke-width="1.2"/>' +
+        '<circle cx="16.5" cy="17.5" r="1.8" fill="#fff" stroke="#FF6B35" stroke-width="1.2"/>' +
+        '</svg>' + ping + '</div>',
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
+    });
+  }
+
+  function adminVehiclePopup(u) {
+    var moving = u.speedKmh > 5;
+    return '<strong>' + esc(u.vehicleNumber || '') + '</strong>' +
+      (u.driverName ? ' · ' + esc(u.driverName) : '') + '<br>' +
+      '<span style="color:' + (moving ? '#059669' : '#64748B') + ';font-weight:600;">' + esc(u.status || '') + '</span>' +
+      (u.speedKmh != null ? ' · ' + Math.round(u.speedKmh) + ' km/h' : '') + '<br>' +
+      esc(u.label || '') + '<br>' +
+      (u.etaMinutes != null ? 'ETA ~' + u.etaMinutes + ' min' : '') +
+      (u.distanceRemainingKm != null ? ' · ' + u.distanceRemainingKm.toFixed(1) + ' km left' : '');
+  }
+
+  function adminTick(ts) {
+    for (var vn in adminAnim) {
+      var a = adminAnim[vn];
+      var layer = adminVehicleLayers[vn];
+      if (!layer) { delete adminAnim[vn]; continue; }
+      var p = Math.min(1, (ts - a.start) / 1500);
+      var e = 1 - Math.pow(1 - p, 3);
+      layer.marker.setLatLng([a.from[0] + (a.to[0] - a.from[0]) * e, a.from[1] + (a.to[1] - a.from[1]) * e]);
+      if (p >= 1) delete adminAnim[vn];
     }
-    if(pts.length)adminMap.fitBounds(window.L.latLngBounds(pts).pad(0.2));
-    for(var vn in gpsMarkers){if(gpsMarkers[vn])adminMap.removeLayer(gpsMarkers[vn]);}
-    gpsMarkers={};
-    for(var key in window._gpsPositions){
-      var p=window._gpsPositions[key];
-      var truckIcon=window.L.divIcon({className:'gps-truck-icon',html:'<div style="background:#10B981;width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 0 8px rgba(16,185,129,0.6);"></div>',iconSize:[16,16]});
-      var mk=window.L.marker([p.lat,p.lng],{icon:truckIcon}).addTo(adminMap);mk.bindPopup('<strong>'+key+'</strong><br>'+esc(p.label||''));gpsMarkers[key]=mk;
+    adminAnimId = Object.keys(adminAnim).length ? requestAnimationFrame(adminTick) : null;
+  }
+
+  function updateAdminFleetMeta(updates) {
+    var meta = document.getElementById('liveFleetCount');
+    if (!meta) return;
+    var moving = 0, parked = 0;
+    (updates || []).forEach(function (u) { if (u.speedKmh > 5) moving++; else parked++; });
+    meta.textContent = (updates || []).length + ' vehicles · ' + moving + ' moving' + (parked ? ' · ' + parked + ' parked' : '');
+  }
+
+  function updateAdminVehicles(updates) {
+    if (!adminMap || !updates || !updates.length) return;
+    (updates || []).forEach(function (u) {
+      if (!u || u.lat == null || u.lng == null) return;
+      var moving = u.speedKmh > 5;
+      var layer = adminVehicleLayers[u.vehicleNumber];
+      if (!layer) {
+        var mk = window.L.marker([u.lat, u.lng], { icon: adminTruckIcon(u.heading, moving) }).addTo(adminMap);
+        mk.bindPopup(adminVehiclePopup(u));
+        layer = adminVehicleLayers[u.vehicleNumber] = { marker: mk };
+      } else {
+        layer.marker.setIcon(adminTruckIcon(u.heading, moving));
+        layer.marker.setPopupContent(adminVehiclePopup(u));
+      }
+      var cur = layer.marker.getLatLng();
+      adminAnim[u.vehicleNumber] = { from: [cur.lat, cur.lng], to: [u.lat, u.lng], start: performance.now() };
+      if (!adminAnimId) adminAnimId = requestAnimationFrame(adminTick);
+    });
+    updateAdminFleetMeta(updates);
+  }
+
+  function locate(text) {
+    if (!text || text.length < 3) return Promise.resolve(null);
+    return fetch('/api/geocode/search?q=' + encodeURIComponent(text) + '&limit=1')
+      .then(function (r) { return r.json(); })
+      .then(function (j) { return (j && j.length) ? [parseFloat(j[0].lat), parseFloat(j[0].lon)] : null; })
+      .catch(function () { return null; });
+  }
+
+  async function drawAdminRoutes() {
+    var res = await window.api('/api/bookings?limit=30', 'GET', null, true).catch(function () { return {}; });
+    var a = arr(res);
+    var pts = [];
+    for (var i = 0; i < a.length; i++) {
+      var b = a[i];
+      var o = await locate(b.origin), d = await locate(b.destination);
+      if (!o || !d) continue;
+      adminRouteLines.push(window.L.polyline([o, d], { color: '#0F4C81', weight: 2, dashArray: '4 6', opacity: 0.5 }).addTo(adminMap));
+      var m = window.L.circleMarker(o, { radius: 6, color: '#0F4C81', fillColor: '#0F4C81', fillOpacity: 0.85 }).addTo(adminMap);
+      m.bindPopup('<strong>Pickup</strong><br>' + esc(b.origin || ''));
+      adminRouteLines.push(m); pts.push(o);
+      var m2 = window.L.circleMarker(d, { radius: 6, color: '#FF6B35', fillColor: '#FF6B35', fillOpacity: 0.85 }).addTo(adminMap);
+      m2.bindPopup('<strong>Drop-off</strong><br>' + esc(b.destination || ''));
+      adminRouteLines.push(m2); pts.push(d);
+    }
+    if (pts.length) { try { adminMap.fitBounds(window.L.latLngBounds(pts).pad(0.2)); } catch (_e) {} }
+  }
+
+  async function initAdminMap() {
+    var c = document.getElementById('liveMap');
+    if (!c || typeof window.L === 'undefined') return;
+    if (!adminMap) {
+      adminMap = window.L.map('liveMap').setView([-34.0, 149.5], 5);
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }).addTo(adminMap);
+      injectAdminMapCSS();
+      var legend = window.L.control({ position: 'bottomleft' });
+      legend.onAdd = function () {
+        var d = document.createElement('div');
+        d.className = 'adm-legend';
+        d.innerHTML = '<b>Fleet status</b>' +
+          '<div><span class="adm-dot" style="background:#10B981"></span>Moving (In transit)</div>' +
+          '<div><span class="adm-dot" style="background:#64748B"></span>Parked / idle</div>' +
+          '<div><span class="adm-dot" style="background:#0F4C81"></span>Pickup</div>' +
+          '<div><span class="adm-dot" style="background:#FF6B35"></span>Drop-off</div>';
+        return d;
+      };
+      legend.addTo(adminMap);
+      adminMap.on('resize', function () { try { adminMap.invalidateSize(); } catch (_e) {} });
+    } else {
+      adminMap.invalidateSize();
+    }
+    if (!adminRoutesDrawn) {
+      adminRoutesDrawn = true;
+      await drawAdminRoutes();
+    }
+    // Vehicles may already be visible from earlier socket updates.
+    for (var vn in window._gpsPositions) {
+      updateAdminVehicles([window._gpsPositions[vn]]);
     }
   }
 
   window._gpsPositions = {};
-  function handleGPSUpdate(updates) { updates.forEach(function(u) { window._gpsPositions[u.vehicleNumber] = u; }); if (activeTab === 'mapTab') renderAdminMap(); }
+  function handleGPSUpdate(updates) {
+    (updates || []).forEach(function (u) { window._gpsPositions[u.vehicleNumber] = u; });
+    if (adminMap) updateAdminVehicles(updates);
+  }
 
   /* ── Socket.io ─────────────────────────────────────────────────── */
   var adminSocket=null, socketBound=false;

@@ -54,9 +54,34 @@
       : m + ':' + String(s).padStart(2, '0');
   }
 
-  // Average delivery speed used to derive ETA from remaining distance.
+  // Fallback average speed used only when the server doesn't send a live ETA.
   const AVG_SPEED_KMH = 42;
-  const ANIM_MS = 3800; // glide time between 5s GPS fixes
+  const ANIM_MS = 1500; // glide time between 2s GPS fixes (smooth, no visible hops)
+
+  /* ── Path helpers (draw travelled / remaining along real routes) ─ */
+  function pathTotalKm(path) {
+    if (!path || path.length < 2) return 0;
+    let t = 0;
+    for (let i = 1; i < path.length; i++) t += haversineKm(path[i - 1], path[i]);
+    return t;
+  }
+  function pathSlice(path, fraction) {
+    if (!path || path.length < 2) return null;
+    const cum = [0];
+    for (let i = 1; i < path.length; i++) cum.push(cum[i - 1] + haversineKm(path[i - 1], path[i]));
+    const total = cum[cum.length - 1] || 1;
+    const target = total * Math.max(0, Math.min(1, fraction));
+    let i = 0;
+    while (i < cum.length - 2 && cum[i + 1] <= target) i++;
+    const segLen = cum[i + 1] - cum[i] || 1;
+    const t = Math.max(0, Math.min(1, (target - cum[i]) / segLen));
+    const a = path[i], b = path[i + 1];
+    const interp = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    const traveled = path.slice(0, i + 1);
+    traveled.push(interp);
+    const remaining = [interp].concat(path.slice(i + 1));
+    return { traveled, remaining };
+  }
 
   /* ── Truck icon (LIVE pulsing) ────────────────────────────────── */
   function truckIcon(heading) {
@@ -167,6 +192,10 @@
             <span class="lt-vehicle-state" data-lt-state="${esc(r.id)}">${esc(r.initialStatus || '')}</span>
           </div>
         </div>
+        <div class="lt-speed-row">
+          <span class="lt-speed" data-lt-speed="${esc(r.id)}">—</span>
+          <span class="lt-speed-sub">current speed</span>
+        </div>
         <div class="lt-progress"><div class="lt-progress-fill" data-lt-fill="${esc(r.id)}" style="width:0%"></div></div>
         <div class="lt-progress-labels">
           <span data-lt-done="${esc(r.id)}">0% travelled</span>
@@ -254,8 +283,18 @@
       fill: card && card.querySelector(selFor('lt-fill')),
       done: card && card.querySelector(selFor('lt-done')),
       remain: card && card.querySelector(selFor('lt-remain')),
+      speed: card && card.querySelector(selFor('lt-speed')),
       state: card && card.querySelector(selFor('lt-state'))
     };
+
+    // Draw the route along the simulator's real path when supplied.
+    if (route.path && Array.isArray(route.path) && route.path.length >= 2) {
+      r.path = route.path.map(p => [Number(p[0]), Number(p[1])]);
+      r.pathKey = route.pathKey || 'initial';
+      const len = pathTotalKm(r.path);
+      if (len > 0) { r.totalKm = len; r.from = r.path[0]; r.to = r.path[r.path.length - 1]; }
+      if (r.line) r.line.setLatLngs(r.path);
+    }
 
     // Initial position: assume vehicle starts at pickup
     r.vehicle = { lat: from[0], lng: from[1], status: route.status };
@@ -277,35 +316,67 @@
   }
 
   /* ── Move a vehicle (from socket or manual) ───────────────────── */
-  function updateVehicle(track, vehicleNumber, lat, lng, label) {
+  function updateVehicle(track, vehicleNumber, payloadOrLat, lng, label) {
     const r = track.byVehicle[vehicleNumber];
     if (!r || !r.marker) return;
-    const toPos = [Number(lat), Number(lng)];
+    // Accept both the new rich object payload and the legacy (lat, lng, label) args.
+    const u = (payloadOrLat && typeof payloadOrLat === 'object')
+      ? payloadOrLat
+      : { lat: payloadOrLat, lng, label };
+    const toPos = [Number(u.lat), Number(u.lng)];
+    if (isNaN(toPos[0]) || isNaN(toPos[1])) return;
     const cur = r.marker.getLatLng();
     const fromPos = [cur.lat, cur.lng];
-    // Skip no-ops
-    if (fromPos[0] === toPos[0] && fromPos[1] === toPos[1]) return;
 
-    // Rotate icon toward heading
-    r.marker.setIcon(truckIcon(bearingDeg(fromPos, toPos)));
-    r.vehicle = { lat: toPos[0], lng: toPos[1], status: r.vehicle ? r.vehicle.status : 'In Transit' };
+    // Route geometry straight from the simulator (updates only when the leg changes).
+    if (u.path && Array.isArray(u.path) && u.path.length >= 2 && u.routeId !== r.pathKey) {
+      r.pathKey = u.routeId;
+      r.path = u.path.map(p => [Number(p[0]), Number(p[1])]);
+      const len = pathTotalKm(r.path);
+      if (len > 0) { r.totalKm = len; r.from = r.path[0]; r.to = r.path[r.path.length - 1]; }
+    }
+
+    // Heading straight from the server (no per-frame bearing jitter).
+    const heading = (u.heading != null) ? Number(u.heading) : bearingDeg(fromPos, toPos);
+
+    // Progress along the ACTUAL route path, not a straight line.
+    let pct, remainKm;
+    if (r.path && r.totalKm) {
+      const doneKm = Math.max(0, Math.min(r.totalKm,
+        (u.progress != null ? Number(u.progress) : haversineKm(r.from, toPos) / r.totalKm) * r.totalKm));
+      const slice = pathSlice(r.path, r.totalKm ? doneKm / r.totalKm : 0);
+      if (slice) {
+        if (r.lineDone) r.lineDone.setLatLngs(slice.traveled);
+        if (r.line) r.line.setLatLngs(slice.remaining);
+      }
+      pct = r.totalKm ? (doneKm / r.totalKm) * 100 : 0;
+      remainKm = Math.max(0, r.totalKm - doneKm);
+    } else {
+      pct = Math.max(0, Math.min(100, (haversineKm(r.from, toPos) / r.totalKm) * 100));
+      remainKm = Math.max(0, r.totalKm - haversineKm(r.from, toPos));
+      if (r.lineDone) r.lineDone.setLatLngs([r.from, toPos]);
+    }
+    if (u.distanceRemainingKm != null) remainKm = Number(u.distanceRemainingKm);
+    const etaSec = (u.etaMinutes != null) ? Number(u.etaMinutes) * 60
+      : (remainKm / AVG_SPEED_KMH) * 3600;
+
+    // Glide smoothly to the new fix + rotate icon toward travel heading.
+    r.marker.setIcon(truckIcon(heading));
+    r.vehicle = { lat: toPos[0], lng: toPos[1], status: u.status || (r.vehicle ? r.vehicle.status : 'In Transit') };
     track.vehicles[vehicleNumber] = { from: fromPos, to: toPos, start: performance.now() };
     track._startLoop();
 
-    // Progress: fraction of straight-line route travelled
-    const pct = Math.max(0, Math.min(100, (haversineKm(from, toPos) / r.totalKm) * 100));
-    const remainKm = Math.max(0, r.totalKm - haversineKm(from, toPos));
-    const etaSec = (remainKm / AVG_SPEED_KMH) * 3600;
-    // Advance the orange travelled segment of the route polyline
-    if (r.lineDone) r.lineDone.setLatLngs([from, [toPos[0], toPos[1]]]);
     if (r.etaEls.fill) r.etaEls.fill.style.width = pct + '%';
     if (r.etaEls.done) r.etaEls.done.textContent = Math.round(pct) + '% travelled';
     if (r.etaEls.remain) r.etaEls.remain.textContent = fmtDist(remainKm) + ' left';
+    if (r.etaEls.speed) r.etaEls.speed.textContent = (u.speedKmh != null) ? Math.round(u.speedKmh) + ' km/h' : '—';
     r._etaSec = etaSec;
-    if (r.etaEls.sub) r.etaEls.sub.textContent = label ? 'Near ' + esc(label) : 'Live tracking';
+    if (r.etaEls.sub) r.etaEls.sub.textContent = (label || u.label) ? 'Near ' + esc(label || u.label) : 'Live tracking';
 
-    if (pct > 97) setStatus(track, r, 'arriving');
-    else if (r.vehicle.status === 'In Transit') setStatus(track, r, 'live');
+    const st = String(u.status || r.vehicle.status || '');
+    if (st === 'Delivered') setStatus(track, r, 'done');
+    else if (st === 'At destination' || pct > 97) setStatus(track, r, 'arriving');
+    else setStatus(track, r, 'live');
     updateEta(track, r);
   }
 
@@ -340,7 +411,7 @@
     track.socket = socket;
     socket.on('gps:update', (updates) => {
       (updates || []).forEach((u) => {
-        updateVehicle(track, u.vehicleNumber, u.lat, u.lng, u.label);
+        updateVehicle(track, u.vehicleNumber, u);
       });
     });
   }
@@ -362,6 +433,9 @@
   .lt-eta-row { display:flex; align-items:flex-end; justify-content:space-between; gap:10px; }
   .lt-eta { font-size:22px; font-weight:800; color:var(--text-hi, #0B1220); font-variant-numeric:tabular-nums; line-height:1.1; }
   .lt-eta-sub { font-size:11px; color:var(--text-muted, #5C6878); }
+  .lt-speed-row { display:flex; align-items:baseline; gap:6px; margin-top:8px; }
+  .lt-speed { font-size:13px; font-weight:700; color:var(--text-hi, #0B1220); font-variant-numeric:tabular-nums; }
+  .lt-speed-sub { font-size:10px; color:var(--text-muted, #5C6878); }
   .lt-vehicle { text-align:right; }
   .lt-vehicle-no { font-size:11px; color:var(--text-muted, #5C6878); display:block; }
   .lt-vehicle-state { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#0F4C81; }

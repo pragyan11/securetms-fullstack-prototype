@@ -196,7 +196,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'SpeedX API',
-    version: '1.1.1',
+    version: '1.2.0',
     uptime: Math.round(process.uptime()),
     db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
     node: process.version
